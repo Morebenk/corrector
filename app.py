@@ -260,7 +260,7 @@ def generate_explanation():
     correct_answer = choices[correct_index]
     choices_text = "\n".join([f"{i+1}. {choice}" for i, choice in enumerate(choices)])
     prompt = (
-        f"Generate a concise explanation for why '{correct_answer}' is the correct answer without referring to index numbers. "
+        f"Generate a concise explanation for why '{correct_answer}' is the correct answer without referring to index numbers or using any formatting like bold/italic... and within 300 tokens "
         f"to the following question: {question_text}\nChoices:\n{choices_text}"
     )
     
@@ -268,6 +268,7 @@ def generate_explanation():
         response = client.models.generate_content(
             model="gemini-2.0-flash",
             contents=[prompt]
+            
         )
         explanation = response.text.strip()
         return jsonify({'status': 'success', 'explanation': explanation})
