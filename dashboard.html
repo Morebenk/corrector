@@ -9,247 +9,7 @@
       rel="stylesheet"
       href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css"
     />
-    <style>
-      /* General Styles */
-      body {
-        font-family: "Inter", "Segoe UI", Tahoma, sans-serif;
-        background: linear-gradient(135deg, #eef2f6, #f9fafc);
-        margin: 0;
-        padding: 20px;
-        line-height: 1.6;
-      }
-      .container {
-        max-width: 1400px;
-        margin: 0 auto;
-        background: #ffffff;
-        padding: 30px;
-        border-radius: 12px;
-        box-shadow: 0 6px 20px rgba(0, 0, 0, 0.08);
-      }
-      h1 {
-        text-align: center;
-        font-size: 2.5rem;
-        color: #1a2b49;
-        margin-bottom: 40px;
-        font-weight: 700;
-      }
-
-      /* Controls Section */
-      .controls {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-        gap: 25px;
-        margin-bottom: 30px;
-      }
-      .controls label {
-        display: flex;
-        flex-direction: column;
-        font-size: 0.95rem;
-        font-weight: 600;
-        color: #344767;
-      }
-      select,
-      input[type="text"],
-      textarea {
-        padding: 12px;
-        font-size: 1rem;
-        margin-top: 8px;
-        border: 1px solid #d1d9e6;
-        border-radius: 8px;
-        background: #fafbff;
-        transition: border-color 0.3s, box-shadow 0.3s;
-        width: 100%;
-        box-sizing: border-box;
-      }
-      select:focus,
-      input[type="text"]:focus,
-      textarea:focus {
-        border-color: #4c6fff;
-        box-shadow: 0 0 8px rgba(76, 111, 255, 0.3);
-        outline: none;
-      }
-
-      /* Buttons */
-      button {
-        padding: 12px 20px;
-        font-size: 1rem;
-        font-weight: 500;
-        cursor: pointer;
-        border: none;
-        border-radius: 8px;
-        background: linear-gradient(90deg, #4c6fff, #738cff);
-        color: #fff;
-        box-shadow: 0 3px 8px rgba(76, 111, 255, 0.2);
-        transition: transform 0.2s, box-shadow 0.2s, background 0.3s;
-      }
-      button:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 6px 12px rgba(76, 111, 255, 0.3);
-        background: linear-gradient(90deg, #3b5ce6, #627bff);
-      }
-      .form-button {
-        background: linear-gradient(90deg, #2ecc71, #54d98c);
-      }
-      .form-button:hover {
-        background: linear-gradient(90deg, #27ae60, #46c77e);
-      }
-      .form-button.cancel {
-        background: linear-gradient(90deg, #ff4757, #ff6b81);
-      }
-      .form-button.cancel:hover {
-        background: linear-gradient(90deg, #e63e4d, #f55c72);
-      }
-      .remove-choice {
-        background: #ff4757;
-        padding: 5px 10px;
-        font-size: 0.9rem;
-      }
-      .generate-explanation {
-        background: linear-gradient(90deg, #9b59b6, #8e44ad);
-        margin-top: 10px;
-      }
-      .generate-explanation:hover {
-        background: linear-gradient(90deg, #8e44ad, #9b59b6);
-      }
-
-      /* Question Details */
-      .question-details {
-        padding-top: 30px;
-        border-top: 1px solid #e6ecf2;
-      }
-      .section-title {
-        font-size: 1.25rem;
-        font-weight: 600;
-        color: #1a2b49;
-        background: #f8fafc;
-        padding: 15px 20px;
-        border-radius: 8px;
-        margin: 25px 0 10px;
-        cursor: pointer;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
-      }
-      .section-title:hover {
-        background: #eef2f6;
-      }
-      .section-content {
-        padding: 0 20px;
-        overflow: hidden;
-        transition: max-height 0.4s ease, opacity 0.3s ease;
-        max-height: 1000px;
-        opacity: 1;
-      }
-      .section-content.collapsed {
-        max-height: 0;
-        opacity: 0;
-      }
-
-      /* Predictions and Consensus */
-      .predictions-container {
-        background: #f9fbfd;
-        padding: 20px;
-        border-radius: 8px;
-        margin-top: 10px;
-      }
-      .prediction {
-        margin: 10px 0;
-        font-size: 1rem;
-        color: #344767;
-      }
-      .full-consensus {
-        color: #2ecc71;
-        font-weight: bold;
-      }
-      .majority-agreement {
-        color: #f1c40f;
-      }
-      .no-agreement {
-        color: #ff4757;
-      }
-
-      /* Edit Form */
-      .edit-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 30px;
-      }
-      .form-field {
-        margin-bottom: 30px;
-      }
-      .choice-container {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        margin-bottom: 15px;
-      }
-      .choice-container input[type="radio"] {
-        margin: 0;
-      }
-      .choice-container input[type="text"] {
-        flex: 1;
-        min-width: 0;
-      }
-      .choice-container button {
-        padding: 5px 10px;
-        font-size: 0.9rem;
-      }
-
-      /* Utility */
-      .loading {
-        text-align: center;
-        color: #7a869a;
-        font-style: italic;
-      }
-      ul {
-        padding-left: 25px;
-      }
-      li {
-        margin: 10px 0;
-        font-size: 1rem;
-      }
-
-      /* Responsive Design */
-      @media (max-width: 768px) {
-        h1 {
-          font-size: 2rem;
-        }
-        .controls {
-          grid-template-columns: 1fr;
-        }
-        .choice-container {
-          flex-wrap: wrap;
-          gap: 5px;
-        }
-        .choice-container input[type="text"] {
-          flex-basis: 100%;
-          margin-top: 5px;
-        }
-        .choice-container button {
-          margin-top: 5px;
-        }
-      }
-      @media (max-width: 480px) {
-        .edit-header {
-          flex-direction: column;
-          align-items: flex-start;
-        }
-        .edit-header h2 {
-          margin-bottom: 20px;
-        }
-        .edit-header .form-button {
-          display: block;
-          width: 100%;
-          margin-bottom: 15px;
-        }
-        button {
-          padding: 10px 15px;
-          font-size: 0.95rem;
-        }
-      }
-    </style>
+    <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
     <div class="container">
@@ -320,20 +80,34 @@
       function populateFilters() {
         const statusSet = new Set(questionsData.map((q) => q.status));
         const statusDropdown = document.getElementById("statusDropdown");
-        statusSet.forEach((status) => {
-          const option = document.createElement("option");
-          option.value = status;
-          option.textContent = status;
-          statusDropdown.appendChild(option);
-        });
+        // Clear existing options except "All"
+        while (statusDropdown.options.length > 1) {
+          statusDropdown.remove(1);
+        }
+        // Add sorted statuses
+        Array.from(statusSet)
+          .sort()
+          .forEach((status) => {
+            const option = document.createElement("option");
+            option.value = status;
+            option.textContent = status;
+            statusDropdown.appendChild(option);
+          });
 
         const categoryDropdown = document.getElementById("categoryDropdown");
-        uniqueCategories.forEach((category) => {
-          const option = document.createElement("option");
-          option.value = category;
-          option.textContent = category;
-          categoryDropdown.appendChild(option);
-        });
+        // Clear existing options except "All"
+        while (categoryDropdown.options.length > 1) {
+          categoryDropdown.remove(1);
+        }
+        // Add sorted categories
+        Array.from(uniqueCategories)
+          .sort()
+          .forEach((category) => {
+            const option = document.createElement("option");
+            option.value = category;
+            option.textContent = category;
+            categoryDropdown.appendChild(option);
+          });
       }
 
       function populateQuestions() {
@@ -358,22 +132,47 @@
           return matchesStatus && matchesCategory && matchesSearch;
         });
 
+        // Group questions by agreement level and sort by ID within groups
+        const groups = {
+          no: [], // 0%
+          low: [], // 1-50%
+          high: [], // 51-99%
+          full: [], // 100%
+        };
+
         filtered.forEach((q) => {
-          const option = document.createElement("option");
-          const consensusRatio = `${q.matching_models}/${q.models_count}`;
           const agreement =
             q.models_count > 0 ? (q.matching_models / q.models_count) * 100 : 0;
-          let statusIcon = "❌";
-          if (agreement === 100) statusIcon = "✅";
-          else if (agreement > 50) statusIcon = "⚠️";
-          option.value = q.id;
-          option.textContent = `${
-            q.id
-          } - ${statusIcon} ${consensusRatio} agree - ${q.enhanced_text.substring(
-            0,
-            50
-          )}...`;
-          questionDropdown.appendChild(option);
+
+          if (agreement === 0) groups.no.push(q);
+          else if (agreement < 50) groups.low.push(q);
+          else if (agreement < 100) groups.high.push(q);
+          else groups.full.push(q);
+        });
+
+        // Sort each group by ID and add to dropdown
+        ["no", "low", "high", "full"].forEach((level) => {
+          groups[level]
+            .sort((a, b) => a.id - b.id)
+            .forEach((q) => {
+              const option = document.createElement("option");
+              const consensusRatio = `${q.matching_models}/${q.models_count}`;
+              const agreement =
+                q.models_count > 0
+                  ? (q.matching_models / q.models_count) * 100
+                  : 0;
+              let statusIcon = "❌";
+              if (agreement === 100) statusIcon = "✅";
+              else if (agreement > 50) statusIcon = "⚠️";
+              option.value = q.id;
+              option.textContent = `${
+                q.id
+              } - ${statusIcon} ${consensusRatio} agree - ${q.enhanced_text.substring(
+                0,
+                50
+              )}...`;
+              questionDropdown.appendChild(option);
+            });
         });
 
         if (filtered.length > 0) {
@@ -432,7 +231,9 @@
           html += `<p>${q.enhanced_text}</p>`;
           html += `<div class="section-title">Choices:</div>`;
           html += `<ul>`;
-          const correctIndex = q.is_correct.findIndex((val) => val === "1");
+          const correctIndex = q.is_correct.findIndex(
+            (val) => val === true || val === "true" || val === "1" || val === 1
+          );
           q.choices.forEach((choice, i) => {
             html +=
               i === correctIndex
