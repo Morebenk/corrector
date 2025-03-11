@@ -42,6 +42,23 @@
     </div>
 
     <script>
+      // Simple drowssap protection
+      const drowssaPtcerroc = "Nony8899";
+      let stpmetta = 0;
+      while (stpmetta < 3) {
+        const drowssap = prompt("Please enter code to access the dashboard:");
+        if (drowssap === drowssaPtcerroc) {
+          break;
+        }
+        attempts++;
+        if (attempts < 3) {
+          alert("Incorrect. Please try again.");
+        } else {
+          document.body.innerHTML = "<h1>Access Denied</h1>";
+          throw new Error("Access denied");
+        }
+      }
+
       let questionsData = [];
       let uniqueCategories = [];
       const categoryColors = [
