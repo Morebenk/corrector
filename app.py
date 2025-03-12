@@ -1,7 +1,8 @@
 #!/usr/bin/env python
 import os
 import logging
-from flask import Flask, jsonify, request, send_from_directory
+from flask import Flask, jsonify, request, send_from_directory, make_response
+import hashlib
 import pandas as pd
 from sqlalchemy import create_engine, text
 from sqlalchemy.exc import SQLAlchemyError
@@ -54,11 +55,13 @@ def get_questions():
             eq.enhanced_text,
             eq.category,
             eq.status,
+            eq.requires_image,
+            eq.image_url,
             COUNT(DISTINCT vr.model_name) AS models_count,
             SUM(CASE WHEN vr.matches_expected IS TRUE THEN 1 ELSE 0 END) AS matching_models
         FROM enhanced_questions eq
         JOIN verification_results vr ON eq.id = vr.question_id
-        GROUP BY eq.id, eq.enhanced_text, eq.category, eq.status
+        GROUP BY eq.id, eq.enhanced_text, eq.category, eq.status, eq.requires_image, eq.image_url
         ORDER BY matching_models ASC, models_count DESC
         LIMIT 100
     """)
@@ -76,17 +79,18 @@ def get_question_details(question_id):
         with engine.connect() as conn:
             result = conn.execute(text("""
                 SELECT eq.enhanced_text, eq.category, eq.status, eq.explanation,
+                       eq.requires_image, eq.image_url,
                        STRING_AGG(ec.choice_text, '||') AS choices,
                        STRING_AGG(ec.is_correct::TEXT, '||') AS is_correct
                 FROM enhanced_questions eq
                 JOIN enhanced_choices ec ON eq.id = ec.enhanced_question_id
                 WHERE eq.id = :question_id
-                GROUP BY eq.id, eq.enhanced_text, eq.category, eq.status, eq.explanation
+                GROUP BY eq.id, eq.enhanced_text, eq.category, eq.status, eq.explanation, eq.requires_image, eq.image_url
             """), {'question_id': question_id})
             row = result.fetchone()
             if not row:
                 return jsonify({'error': 'Question not found'}), 404
-            q_text, category, status, explanation, choices_text, is_correct_text = row
+            q_text, category, status, explanation, requires_image, image_url, choices_text, is_correct_text = row
 
             df_results = pd.read_sql_query(text("""
                 SELECT 
@@ -107,6 +111,8 @@ def get_question_details(question_id):
             'category': category,
             'status': status,
             'explanation': explanation,
+            'requires_image': requires_image,
+            'image_url': image_url,
             'choices': choices_text.split('||') if choices_text else [],
             'is_correct': is_correct_text.split('||') if is_correct_text else [],
             'models_count': int(df_results.shape[0]),
@@ -181,12 +187,13 @@ def update_question(question_id):
             # Update the question record
             conn.execute(text("""
                 UPDATE enhanced_questions 
-                SET enhanced_text = :new_text, category = :new_category, explanation = :final_explanation 
+                SET enhanced_text = :new_text, category = :new_category, explanation = :final_explanation, requires_image = :requires_image
                 WHERE id = :question_id
             """), {
                 'new_text': new_text,
                 'new_category': new_category,
                 'final_explanation': final_explanation,
+                'requires_image': data.get('requires_image', False),
                 'question_id': question_id
             })
             
@@ -260,7 +267,7 @@ def generate_explanation():
     correct_answer = choices[correct_index]
     choices_text = "\n".join([f"{i+1}. {choice}" for i, choice in enumerate(choices)])
     prompt = (
-        f"Generate a concise explanation for why '{correct_answer}' is the correct answer without referring to index numbers. "
+        f"Generate a concise explanation for why '{correct_answer}' is the correct answer without referring to index numbers or using any formatting like bold/italic... and within 300 tokens "
         f"to the following question: {question_text}\nChoices:\n{choices_text}"
     )
     
@@ -268,13 +275,134 @@ def generate_explanation():
         response = client.models.generate_content(
             model="gemini-2.0-flash",
             contents=[prompt]
+            
         )
         explanation = response.text.strip()
         return jsonify({'status': 'success', 'explanation': explanation})
     except Exception as e:
         logger.exception("Error generating explanation in generate_explanation endpoint")
         return jsonify({'status': 'error', 'error': str(e)}), 500
+@app.route('/api/question/<int:question_id>/mark-corrected', methods=['POST'])
+def mark_question_corrected(question_id):
+    try:
+        with engine.begin() as conn:
+            conn.execute(text("""
+                UPDATE enhanced_questions
+                SET status = 'corrected'
+                WHERE id = :question_id
+            """), {'question_id': question_id})
+        return jsonify({'status': 'success'})
+    except SQLAlchemyError as e:
+        logger.exception("Database error in mark_question_corrected")
+        return jsonify({'status': 'error', 'error': str(e)}), 500
+
+@app.route('/api/question/<int:question_id>/image', methods=['POST', 'DELETE'])
+def handle_image(question_id):
+    import boto3
+    from botocore.config import Config
+    from werkzeug.utils import secure_filename
+    import uuid
+
+    # Initialize Supabase Storage client using S3 compatible API
+    s3 = boto3.client(
+        's3',
+        endpoint_url=f"https://{os.environ.get('SUPABASE_PROJECT_ID')}.supabase.co/storage/v1/s3",
+        region_name="eu-west-3",
+        aws_access_key_id=os.environ.get('SUPABASE_STORAGE_KEY'),
+        aws_secret_access_key=os.environ.get('SUPABASE_STORAGE_SECRET'),
+        config=Config(signature_version='v4')
+    )
+    bucket_name = 'questions-images'
+
+    if request.method == 'POST':
+        if 'image' not in request.files:
+            return jsonify({'status': 'error', 'error': 'No image file provided'}), 400
+        
+        file = request.files['image']
+        if file.filename == '':
+            return jsonify({'status': 'error', 'error': 'No selected file'}), 400
+
+        if file:
+            try:
+                # Create unique filename
+                filename = secure_filename(file.filename)
+                unique_filename = f"{uuid.uuid4()}_{filename}"
+
+                # Upload to Supabase Storage
+                s3.upload_fileobj(
+                    file,
+                    bucket_name,
+                    unique_filename,
+                    ExtraArgs={'ACL': 'public-read'}
+                )
+
+                # Get the public URL
+                image_url = f"https://{os.environ.get('SUPABASE_PROJECT_ID')}.supabase.co/storage/v1/object/public/{bucket_name}/{unique_filename}"
+
+                # Update database
+                with engine.begin() as conn:
+                    # Get current image URL to delete old image if exists
+                    result = conn.execute(text("""
+                        SELECT image_url FROM enhanced_questions WHERE id = :question_id
+                    """), {'question_id': question_id})
+                    old_image = result.scalar()
+
+                    # Update with new image URL
+                    conn.execute(text("""
+                        UPDATE enhanced_questions
+                        SET image_url = :image_url
+                        WHERE id = :question_id
+                    """), {
+                        'question_id': question_id,
+                        'image_url': image_url
+                    })
+
+                    # Delete old image if exists
+                    if old_image:
+                        try:
+                            old_key = old_image.split('/')[-1]
+                            s3.delete_object(Bucket=bucket_name, Key=old_key)
+                        except Exception as e:
+                            logger.warning(f"Failed to delete old image: {str(e)}")
+
+                return jsonify({
+                    'status': 'success',
+                    'image_url': image_url
+                })
+
+            except Exception as e:
+                logger.exception("Error handling image upload")
+                return jsonify({'status': 'error', 'error': str(e)}), 500
+
+    elif request.method == 'DELETE':
+        try:
+            with engine.begin() as conn:
+                # Get current image URL
+                result = conn.execute(text("""
+                    SELECT image_url FROM enhanced_questions WHERE id = :question_id
+                """), {'question_id': question_id})
+                current_image = result.scalar()
+
+                if current_image:
+                    # Delete from Supabase Storage
+                    image_key = current_image.split('/')[-1]
+                    s3.delete_object(Bucket=bucket_name, Key=image_key)
+
+                    # Clear image URL in database
+                    conn.execute(text("""
+                        UPDATE enhanced_questions
+                        SET image_url = NULL
+                        WHERE id = :question_id
+                    """), {'question_id': question_id})
+
+                return jsonify({'status': 'success'})
+
+        except Exception as e:
+            logger.exception("Error handling image deletion")
+            return jsonify({'status': 'error', 'error': str(e)}), 500
 
 if __name__ == '__main__':
     # For production, use a WSGI server such as gunicorn.
     app.run(debug=True)
+
+
