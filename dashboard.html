@@ -29,6 +29,11 @@
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
+    <!-- Image Modal -->
+    <div id="imageModal" class="image-modal">
+      <img class="modal-content" id="modalImage" />
+    </div>
+
     <div class="container">
       <h1>Consensus Dashboard</h1>
       <div class="search-section">
@@ -82,22 +87,55 @@
     </div>
 
     <script>
-      // Simple drowssap protection
+      // Simple drowssap protection with persistence
       const drowssaPtcerroc = "Nony8899";
-      let stpmetta = 0;
-      while (stpmetta < 3) {
-        const drowssap = prompt("Please enter code to access the dashboard:");
-        if (drowssap === drowssaPtcerroc) {
-          break;
-        }
-        attempts++;
-        if (attempts < 3) {
-          alert("Incorrect. Please try again.");
-        } else {
-          document.body.innerHTML = "<h1>Access Denied</h1>";
-          throw new Error("Access denied");
+      const storedAuth = localStorage.getItem("dashboardAuth");
+
+      if (!storedAuth || storedAuth !== drowssaPtcerroc) {
+        let stpmetta = 0;
+        while (stpmetta < 3) {
+          const drowssap = prompt("Please enter code to access the dashboard:");
+          if (drowssap === drowssaPtcerroc) {
+            localStorage.setItem("dashboardAuth", drowssaPtcerroc);
+            break;
+          }
+          stpmetta++;
+          if (stpmetta < 3) {
+            alert("Incorrect. Please try again.");
+          } else {
+            document.body.innerHTML = "<h1>Access Denied</h1>";
+            throw new Error("Access denied");
+          }
         }
       }
+
+      // Image modal functions
+      function openImageModal(imageUrl) {
+        const modal = document.getElementById("imageModal");
+        const modalImg = document.getElementById("modalImage");
+        modalImg.src = imageUrl;
+        modal.classList.add("active");
+        document.body.style.overflow = "hidden";
+      }
+
+      // Close modal when clicking outside the image
+      document
+        .getElementById("imageModal")
+        .addEventListener("click", function (e) {
+          if (e.target === this) {
+            this.classList.remove("active");
+            document.body.style.overflow = "";
+          }
+        });
+
+      // Close modal with Escape key
+      document.addEventListener("keydown", function (e) {
+        if (e.key === "Escape") {
+          const modal = document.getElementById("imageModal");
+          modal.classList.remove("active");
+          document.body.style.overflow = "";
+        }
+      });
 
       let questionsData = [];
       let uniqueCategories = [];
@@ -370,7 +408,7 @@
 
           if (q.image_url) {
             html += `<div class="image-container">
-                  <img src="${q.image_url}" alt="Question Image" class="question-image"/>
+                  <img src="${q.image_url}" alt="Question Image" class="question-image" onclick="openImageModal('${q.image_url}')"/>
                   <button onclick="removeImage(${q.id})" class="image-remove-btn">
                       <i class="fas fa-trash"></i> Remove Image
                   </button>
@@ -651,37 +689,6 @@
         categoryDiv.appendChild(categorySelect);
         form.appendChild(categoryDiv);
 
-        // // Add status and mark as corrected
-        // if (q.status !== "corrected") {
-        //   const statusDiv = document.createElement("div");
-        //   statusDiv.classList.add("form-field");
-        //   const markCorrectedBtn = document.createElement("button");
-        //   markCorrectedBtn.type = "button";
-        //   markCorrectedBtn.innerHTML =
-        //     '<i class="fas fa-check-circle"></i> Mark as Corrected';
-        //   markCorrectedBtn.classList.add("status-button");
-        //   markCorrectedBtn.addEventListener("click", async () => {
-        //     if (form.dataset.hasChanges === "true") {
-        //       alert("Please save your changes before marking as corrected.");
-        //       return;
-        //     }
-        //     try {
-        //       markCorrectedBtn.disabled = true;
-        //       markCorrectedBtn.innerHTML =
-        //         '<i class="fas fa-spinner fa-spin"></i> Marking as corrected...';
-        //       await markAsCorrected(q.id);
-        //     } catch (err) {
-        //       console.error(err);
-        //     } finally {
-        //       markCorrectedBtn.disabled = false;
-        //       markCorrectedBtn.innerHTML =
-        //         '<i class="fas fa-check-circle"></i> Mark as Corrected';
-        //     }
-        //   });
-        //   statusDiv.appendChild(markCorrectedBtn);
-        //   form.appendChild(statusDiv);
-        // }
-
         // Add image section
         const imageDiv = document.createElement("div");
         imageDiv.classList.add("form-field", "image-section");
@@ -702,7 +709,7 @@
         if (q.image_url) {
           imageContentDiv.innerHTML = `
             <div class="image-container">
-              <img src="${q.image_url}" alt="Question Image" class="question-image"/>
+              <img src="${q.image_url}" alt="Question Image" class="question-image" onclick="openImageModal('${q.image_url}')"/>
               <button type="button" onclick="removeImage(${q.id})" class="image-remove-btn">
                 <i class="fas fa-trash"></i> Remove Image
               </button>
@@ -944,6 +951,57 @@
         .addEventListener("change", (e) =>
           displayQuestionDetails(e.target.value)
         );
+
+      async function uploadImage(questionId, input) {
+        if (!input.files || input.files.length === 0) return;
+
+        const file = input.files[0];
+        const formData = new FormData();
+        formData.append("image", file);
+
+        try {
+          const response = await fetch(`/api/question/${questionId}/image`, {
+            method: "POST",
+            body: formData,
+          });
+
+          const result = await response.json();
+          if (result.status === "success") {
+            // Refresh the question details to show the new image
+            displayQuestionDetails(questionId);
+          } else {
+            alert(
+              "Error uploading image: " + (result.error || "Unknown error")
+            );
+          }
+        } catch (err) {
+          console.error("Error:", err);
+          alert("Error uploading image");
+        }
+      }
+
+      async function removeImage(questionId) {
+        if (!confirm("Are you sure you want to remove this image?")) {
+          return;
+        }
+
+        try {
+          const response = await fetch(`/api/question/${questionId}/image`, {
+            method: "DELETE",
+          });
+
+          const result = await response.json();
+          if (result.status === "success") {
+            // Refresh the question details to show the image was removed
+            displayQuestionDetails(questionId);
+          } else {
+            alert("Error removing image: " + (result.error || "Unknown error"));
+          }
+        } catch (err) {
+          console.error("Error:", err);
+          alert("Error removing image");
+        }
+      }
 
       fetchQuestions();
     </script>

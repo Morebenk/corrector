@@ -63,7 +63,7 @@ def get_questions():
         JOIN verification_results vr ON eq.id = vr.question_id
         GROUP BY eq.id, eq.enhanced_text, eq.category, eq.status, eq.requires_image, eq.image_url
         ORDER BY matching_models ASC, models_count DESC
-        LIMIT 100
+        
     """)
     try:
         with engine.connect() as conn:
@@ -299,20 +299,17 @@ def mark_question_corrected(question_id):
 @app.route('/api/question/<int:question_id>/image', methods=['POST', 'DELETE'])
 def handle_image(question_id):
     import boto3
-    from botocore.config import Config
     from werkzeug.utils import secure_filename
     import uuid
 
-    # Initialize Supabase Storage client using S3 compatible API
     s3 = boto3.client(
         's3',
-        endpoint_url=f"https://{os.environ.get('SUPABASE_PROJECT_ID')}.supabase.co/storage/v1/s3",
-        region_name="eu-west-3",
-        aws_access_key_id=os.environ.get('SUPABASE_STORAGE_KEY'),
-        aws_secret_access_key=os.environ.get('SUPABASE_STORAGE_SECRET'),
-        config=Config(signature_version='v4')
+        aws_access_key_id=os.environ.get('AWS_ACCESS_KEY_ID'),
+        aws_secret_access_key=os.environ.get('AWS_SECRET_ACCESS_KEY'),
+        region_name=os.environ.get('AWS_REGION')
     )
-    bucket_name = 'questions-images'
+    bucket_name = os.environ.get('S3_BUCKET')
+    cloudfront_domain = os.environ.get('CLOUDFRONT_DOMAIN')
 
     if request.method == 'POST':
         if 'image' not in request.files:
@@ -324,20 +321,22 @@ def handle_image(question_id):
 
         if file:
             try:
-                # Create unique filename
                 filename = secure_filename(file.filename)
                 unique_filename = f"{uuid.uuid4()}_{filename}"
 
-                # Upload to Supabase Storage
+                # Upload to S3
                 s3.upload_fileobj(
                     file,
                     bucket_name,
                     unique_filename,
-                    ExtraArgs={'ACL': 'public-read'}
+                    ExtraArgs={
+                        'ContentType': file.content_type,
+                        'CacheControl': 'max-age=31536000'  # Cache for 1 year
+                    }
                 )
 
-                # Get the public URL
-                image_url = f"https://{os.environ.get('SUPABASE_PROJECT_ID')}.supabase.co/storage/v1/object/public/{bucket_name}/{unique_filename}"
+                # Generate CloudFront URL
+                image_url = f"https://{cloudfront_domain}/{unique_filename}"
 
                 # Update database
                 with engine.begin() as conn:
@@ -384,7 +383,7 @@ def handle_image(question_id):
                 current_image = result.scalar()
 
                 if current_image:
-                    # Delete from Supabase Storage
+                    # Delete from S3
                     image_key = current_image.split('/')[-1]
                     s3.delete_object(Bucket=bucket_name, Key=image_key)
 
@@ -400,6 +399,8 @@ def handle_image(question_id):
         except Exception as e:
             logger.exception("Error handling image deletion")
             return jsonify({'status': 'error', 'error': str(e)}), 500
+
+
 
 if __name__ == '__main__':
     # For production, use a WSGI server such as gunicorn.
