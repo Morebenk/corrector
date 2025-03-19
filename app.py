@@ -47,51 +47,176 @@ def index():
         logger.exception("Error serving dashboard.html")
         return jsonify({'error': 'Dashboard not found'}), 404
 
+
 @app.route('/api/questions', methods=['GET'])
 def get_questions():
-    query = text("""
-        SELECT 
-            eq.id,
-            eq.enhanced_text,
-            eq.category,
-            eq.status,
-            eq.requires_image,
-            eq.image_url,
-            COUNT(DISTINCT vr.model_name) AS models_count,
-            SUM(CASE WHEN vr.matches_expected IS TRUE THEN 1 ELSE 0 END) AS matching_models
-        FROM enhanced_questions eq
-        JOIN verification_results vr ON eq.id = vr.question_id
-        GROUP BY eq.id, eq.enhanced_text, eq.category, eq.status, eq.requires_image, eq.image_url
-        ORDER BY matching_models ASC, models_count DESC
-        
-    """)
+    # Get the optional file_path filter from query parameters
+    file_path_filter = request.args.get('file_path')
+    
     try:
         with engine.connect() as conn:
-            df = pd.read_sql_query(query, conn)
-        return jsonify(df.to_dict(orient='records'))
+            if file_path_filter:
+                # Optimized query to get only enhanced questions that appear in the selected file
+                # with their correct array_order, sorted by array_order
+                file_filtered_query = text("""
+                    -- Get only the enhanced questions that have representatives in the specified file
+                    SELECT 
+                        eq.id,
+                        eq.question_id,
+                        eq.enhanced_text,
+                        eq.category,
+                        eq.status,
+                        eq.requires_image,
+                        eq.image_url,
+                        COALESCE(q_direct.array_order, d.array_order) as array_order,
+                        CASE 
+                            WHEN q_direct.id IS NOT NULL THEN 'direct'
+                            ELSE 'duplicate'
+                        END as source_type,
+                        q.file_path AS representative_file_path,
+                        COUNT(DISTINCT vr.model_name) AS models_count,
+                        SUM(CASE WHEN vr.matches_expected IS TRUE THEN 1 ELSE 0 END) AS matching_models
+                    FROM enhanced_questions eq
+                    JOIN questions q ON q.id = eq.question_id
+                    JOIN verification_results vr ON eq.id = vr.question_id
+                    -- Look for direct questions in this file
+                    LEFT JOIN questions q_direct ON 
+                        q_direct.id = eq.question_id AND 
+                        q_direct.file_path = :file_path
+                    -- Look for this as a representative of duplicates in this file
+                    LEFT JOIN duplicates d ON 
+                        d.representative_id = eq.question_id AND 
+                        d.file_path = :file_path
+                    WHERE 
+                        q_direct.id IS NOT NULL OR d.representative_id IS NOT NULL
+                    GROUP BY 
+                        eq.id, eq.question_id, eq.enhanced_text, eq.category, eq.status, 
+                        eq.requires_image, eq.image_url, q.file_path, 
+                        q_direct.array_order, d.array_order, q_direct.id
+                    ORDER BY 
+                        COALESCE(q_direct.array_order, d.array_order)
+                """)
+                
+                df = pd.read_sql_query(file_filtered_query, conn, params={'file_path': file_path_filter})
+                logger.info(f"Optimized query returned {len(df)} enhanced questions for file {file_path_filter}")
+                
+            else:
+                # No file filter - get all questions
+                # Here we don't sort by status anymore, just by ID as a default order
+                main_query = text("""
+                    SELECT 
+                        eq.id,
+                        eq.question_id,
+                        eq.enhanced_text,
+                        eq.category,
+                        eq.status,
+                        eq.requires_image,
+                        eq.image_url,
+                        q.file_path AS representative_file_path,
+                        COUNT(DISTINCT vr.model_name) AS models_count,
+                        SUM(CASE WHEN vr.matches_expected IS TRUE THEN 1 ELSE 0 END) AS matching_models
+                    FROM enhanced_questions eq
+                    JOIN questions q ON q.id = eq.question_id
+                    JOIN verification_results vr ON eq.id = vr.question_id
+                    GROUP BY eq.id, eq.question_id, eq.enhanced_text, eq.category, eq.status, eq.requires_image, eq.image_url, q.file_path
+                    ORDER BY eq.id
+                """)
+                df = pd.read_sql_query(main_query, conn)
+            
+            # Get all available file paths for the dropdown
+            all_files_query = text("""
+                -- Get all files with questions that have enhanced versions
+                SELECT DISTINCT q.file_path 
+                FROM questions q
+                JOIN enhanced_questions eq ON q.id = eq.question_id
+                
+                UNION
+                
+                -- Get all files with duplicates that have enhanced representatives
+                SELECT DISTINCT d.file_path
+                FROM duplicates d
+                JOIN enhanced_questions eq ON d.representative_id = eq.question_id
+                
+                ORDER BY file_path
+            """)
+            
+            all_files_df = pd.read_sql_query(all_files_query, conn)
+            all_file_paths = all_files_df['file_path'].tolist()
+            
+            # Return as JSON
+            return jsonify({
+                'questions': df.to_dict(orient='records'),
+                'available_files': all_file_paths
+            })
+            
     except SQLAlchemyError as e:
         logger.exception("Database error in get_questions")
-        return jsonify({'error': 'Database error'}), 500
+        return jsonify({'error': f'Database error: {str(e)}'}), 500
+
+
 
 @app.route('/api/question/<int:question_id>', methods=['GET'])
 def get_question_details(question_id):
     try:
         with engine.connect() as conn:
+            # First, get the basic question data
             result = conn.execute(text("""
                 SELECT eq.enhanced_text, eq.category, eq.status, eq.explanation,
-                       eq.requires_image, eq.image_url,
+                       eq.requires_image, eq.image_url, q.id AS original_question_id,
+                       q.file_path AS representative_file_path,
                        STRING_AGG(ec.choice_text, '||') AS choices,
                        STRING_AGG(ec.is_correct::TEXT, '||') AS is_correct
                 FROM enhanced_questions eq
+                JOIN questions q ON q.id = eq.question_id
                 JOIN enhanced_choices ec ON eq.id = ec.enhanced_question_id
                 WHERE eq.id = :question_id
-                GROUP BY eq.id, eq.enhanced_text, eq.category, eq.status, eq.explanation, eq.requires_image, eq.image_url
+                GROUP BY eq.id, eq.enhanced_text, eq.category, eq.status, eq.explanation, 
+                         eq.requires_image, eq.image_url, q.id, q.file_path
             """), {'question_id': question_id})
+            
             row = result.fetchone()
             if not row:
                 return jsonify({'error': 'Question not found'}), 404
-            q_text, category, status, explanation, requires_image, image_url, choices_text, is_correct_text = row
-
+                
+            q_text, category, status, explanation, requires_image, image_url, original_question_id, rep_file_path, choices_text, is_correct_text = row
+            
+            # Now get all files where this question appears 
+            # (both as a direct representative and as a duplicate)
+            file_data_query = text("""
+                -- Direct file location of the representative
+                SELECT 
+                    q.file_path, 
+                    q.array_order,
+                    'representative' AS question_type
+                FROM questions q
+                WHERE q.id = :question_id
+                
+                UNION ALL
+                
+                -- Files where this appears as a representative of duplicates
+                SELECT 
+                    d.file_path,
+                    d.array_order,
+                    'duplicate_rep' AS question_type
+                FROM duplicates d
+                WHERE d.representative_id = :question_id
+                
+                ORDER BY file_path, array_order
+            """)
+            
+            file_data_rows = conn.execute(file_data_query, {'question_id': original_question_id}).fetchall()
+            
+            # Format the file data
+            file_locations = []
+            for file_row in file_data_rows:
+                file_path, array_order, question_type = file_row
+                file_locations.append({
+                    'file_path': file_path,
+                    'array_order': array_order,
+                    'question_type': question_type
+                })
+            
+            # Get verification results
             df_results = pd.read_sql_query(text("""
                 SELECT 
                     vr.model_name,
@@ -113,6 +238,9 @@ def get_question_details(question_id):
             'explanation': explanation,
             'requires_image': requires_image,
             'image_url': image_url,
+            'original_question_id': original_question_id,
+            'representative_file_path': rep_file_path,
+            'file_locations': file_locations,
             'choices': choices_text.split('||') if choices_text else [],
             'is_correct': is_correct_text.split('||') if is_correct_text else [],
             'models_count': int(df_results.shape[0]),
@@ -121,6 +249,7 @@ def get_question_details(question_id):
     except SQLAlchemyError as e:
         logger.exception("Database error in get_question_details")
         return jsonify({'error': f'Database error: {str(e)}'}), 500
+
 
 @app.route('/api/question/<int:question_id>', methods=['POST'])
 def update_question(question_id):
@@ -254,6 +383,7 @@ def update_question(question_id):
         logger.exception("Database error in update_question")
         return jsonify({'status': 'error', 'error': f'Database error: {str(e)}'}), 500
 
+
 @app.route('/api/generate_explanation', methods=['POST'])
 def generate_explanation():
     data = request.get_json()
@@ -282,6 +412,8 @@ def generate_explanation():
     except Exception as e:
         logger.exception("Error generating explanation in generate_explanation endpoint")
         return jsonify({'status': 'error', 'error': str(e)}), 500
+
+
 @app.route('/api/question/<int:question_id>/mark-corrected', methods=['POST'])
 def mark_question_corrected(question_id):
     try:
@@ -295,6 +427,7 @@ def mark_question_corrected(question_id):
     except SQLAlchemyError as e:
         logger.exception("Database error in mark_question_corrected")
         return jsonify({'status': 'error', 'error': str(e)}), 500
+
 
 @app.route('/api/question/<int:question_id>/image', methods=['POST', 'DELETE'])
 def handle_image(question_id):
@@ -400,7 +533,30 @@ def handle_image(question_id):
             logger.exception("Error handling image deletion")
             return jsonify({'status': 'error', 'error': str(e)}), 500
 
+# Add this new endpoint after the /api/questions endpoint
 
+@app.route('/api/files', methods=['GET'])
+def get_all_files():
+    """Return all distinct file paths from questions and duplicates tables"""
+    try:
+        with engine.connect() as conn:
+            query = text("""
+                -- Get all files with direct representatives
+                SELECT DISTINCT file_path FROM questions
+                
+                UNION
+                
+                -- Get all files with duplicates
+                SELECT DISTINCT file_path FROM duplicates
+                
+                ORDER BY file_path
+            """)
+            
+            df = pd.read_sql_query(query, conn)
+            return jsonify({'file_paths': df['file_path'].tolist()})
+    except SQLAlchemyError as e:
+        logger.exception("Database error in get_all_files")
+        return jsonify({'error': f'Database error: {str(e)}'}), 500
 
 if __name__ == '__main__':
     # For production, use a WSGI server such as gunicorn.

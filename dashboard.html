@@ -51,6 +51,14 @@
         <div class="filters-row">
           <div class="filter-item">
             <label>
+              <i class="fas fa-file-alt"></i>
+              <select id="filePathDropdown">
+                <option value="all">All Files</option>
+              </select>
+            </label>
+          </div>
+          <div class="filter-item">
+            <label>
               <i class="fas fa-flag"></i>
               <select id="statusDropdown">
                 <option value="all">All Status</option>
@@ -139,6 +147,7 @@
 
       let questionsData = [];
       let uniqueCategories = [];
+      let uniqueFilePaths = [];
       const categoryColors = [
         "#4c6fff",
         "#6f42c1",
@@ -149,37 +158,61 @@
         "#17a2b8",
         "#6610f2",
       ];
+
       let categoryColorMap = {};
 
+      // Add to your existing script section
+      // Add global variable to track available file paths
+      let availableFilePaths = [];
+
+      // Modified fetchQuestions function
       async function fetchQuestions() {
         try {
           document.getElementById("output").innerHTML =
             "<p class='loading'>Loading questions...</p>";
-          const response = await fetch("/api/questions");
-          questionsData = await response.json();
+
+          // Get file path filter if it exists
+          const filePathDropdown = document.getElementById("filePathDropdown");
+          const filePathFilter = filePathDropdown
+            ? filePathDropdown.value
+            : "all";
+
+          let url = "/api/questions";
+          if (filePathFilter && filePathFilter !== "all") {
+            url += `?file_path=${encodeURIComponent(filePathFilter)}`;
+          }
+
+          const response = await fetch(url);
+          const data = await response.json();
+
+          // Handle both formats (backward compatibility)
+          questionsData = data.questions || data;
+          availableFilePaths = data.available_files || [];
+
           uniqueCategories = [...new Set(questionsData.map((q) => q.category))];
           categoryColorMap = {};
           uniqueCategories.forEach((cat, index) => {
             categoryColorMap[cat] =
               categoryColors[index % categoryColors.length];
           });
+
           populateFilters();
           populateQuestions();
         } catch (err) {
           console.error("Error fetching questions:", err);
-          document.getElementById("output").innerHTML =
-            "<p>Error loading questions.</p>";
+          document.getElementById(
+            "output"
+          ).innerHTML = `<p>Error loading questions: ${err.message}</p>`;
         }
       }
 
       function populateFilters() {
+        // Status dropdown population (unchanged)
         const statusSet = new Set(questionsData.map((q) => q.status));
         const statusDropdown = document.getElementById("statusDropdown");
-        // Clear existing options except "All"
         while (statusDropdown.options.length > 1) {
           statusDropdown.remove(1);
         }
-        // Add sorted statuses
         Array.from(statusSet)
           .sort()
           .forEach((status) => {
@@ -189,12 +222,11 @@
             statusDropdown.appendChild(option);
           });
 
+        // Category dropdown population (unchanged)
         const categoryDropdown = document.getElementById("categoryDropdown");
-        // Clear existing options except "All"
         while (categoryDropdown.options.length > 1) {
           categoryDropdown.remove(1);
         }
-        // Add sorted categories
         Array.from(uniqueCategories)
           .sort()
           .forEach((category) => {
@@ -203,6 +235,63 @@
             option.textContent = category;
             categoryDropdown.appendChild(option);
           });
+
+        // Get or create file path dropdown
+        let filePathDropdown = document.getElementById("filePathDropdown");
+        if (!filePathDropdown) {
+          // Create the file path dropdown if it doesn't exist
+          const filtersRow = document.querySelector(".filters-row");
+          const filterItem = document.createElement("div");
+          filterItem.className = "filter-item";
+
+          filterItem.innerHTML = `
+      <label>
+        <i class="fas fa-file-alt"></i>
+        <select id="filePathDropdown">
+          <option value="all">All Files</option>
+        </select>
+      </label>
+    `;
+
+          filtersRow.appendChild(filterItem);
+          filePathDropdown = document.getElementById("filePathDropdown");
+
+          // Add event listener for the new dropdown
+          filePathDropdown.addEventListener("change", function () {
+            fetchQuestions();
+          });
+        }
+
+        // Save current selection before clearing
+        const currentSelection = filePathDropdown.value;
+
+        // Clear existing options except "All"
+        while (filePathDropdown.options.length > 1) {
+          filePathDropdown.remove(1);
+        }
+
+        // Add file paths to dropdown
+        availableFilePaths.sort().forEach((filePath) => {
+          const option = document.createElement("option");
+          option.value = filePath;
+
+          // Display just the filename, not the full path
+          const fileName = filePath.split("/").pop();
+          option.textContent = fileName;
+          option.title = filePath; // Show full path on hover
+
+          filePathDropdown.appendChild(option);
+        });
+
+        // Restore previous selection if it exists in new options
+        if (currentSelection && currentSelection !== "all") {
+          for (let i = 0; i < filePathDropdown.options.length; i++) {
+            if (filePathDropdown.options[i].value === currentSelection) {
+              filePathDropdown.selectedIndex = i;
+              break;
+            }
+          }
+        }
       }
 
       function populateQuestions() {
@@ -212,7 +301,12 @@
         const searchQuery = document
           .getElementById("searchInput")
           .value.toLowerCase();
+        const requiresImageFilter = document.getElementById(
+          "requiresImageDropdown"
+        ).value;
         const questionDropdown = document.getElementById("questionDropdown");
+        const filePathFilter =
+          document.getElementById("filePathDropdown").value;
 
         questionDropdown.innerHTML = "";
 
@@ -226,9 +320,6 @@
             searchQuery === "" ||
             q.enhanced_text.toLowerCase().includes(searchQuery) ||
             (searchQueryNum && q.id === searchQueryNum);
-          const requiresImageFilter = document.getElementById(
-            "requiresImageDropdown"
-          ).value;
           const matchesImageRequirement =
             requiresImageFilter === "all" ||
             (requiresImageFilter === "yes" &&
@@ -240,6 +331,7 @@
                 q.requires_image === 0 ||
                 q.requires_image === "0" ||
                 !q.requires_image));
+
           return (
             matchesStatus &&
             matchesCategory &&
@@ -248,57 +340,83 @@
           );
         });
 
-        // Group questions by agreement level and sort by ID within groups
-        const groups = {
-          no: [], // 0%
-          low: [], // 1-50%
-          high: [], // 51-99%
-          full: [], // 100%
-        };
-
-        filtered.forEach((q) => {
-          const agreement =
-            q.models_count > 0 ? (q.matching_models / q.models_count) * 100 : 0;
-
-          if (agreement === 0) groups.no.push(q);
-          else if (agreement < 50) groups.low.push(q);
-          else if (agreement < 100) groups.high.push(q);
-          else groups.full.push(q);
-        });
-
-        // Sort each group by ID and add to dropdown
-        ["no", "low", "high", "full"].forEach((level) => {
-          groups[level]
-            .sort((a, b) => a.id - b.id)
-            .forEach((q) => {
-              const option = document.createElement("option");
-              const consensusRatio = `${q.matching_models}/${q.models_count}`;
-              const agreement =
-                q.models_count > 0
-                  ? (q.matching_models / q.models_count) * 100
-                  : 0;
-              let statusIcon = "❌";
-              if (agreement === 100) statusIcon = "✅";
-              else if (agreement > 50) statusIcon = "⚠️";
-              option.value = q.id;
-              const maxLength = window.innerWidth < 768 ? 50 : 100;
-              option.textContent = `${
-                q.id
-              } - ${statusIcon} ${consensusRatio} agree - ${q.enhanced_text.substring(
-                0,
-                maxLength
-              )}...`;
-              option.title = q.enhanced_text; // Add tooltip with full text
-              questionDropdown.appendChild(option);
-            });
-        });
-
-        if (filtered.length > 0) {
-          questionDropdown.value = filtered[0].id;
-          displayQuestionDetails(filtered[0].id);
-        } else {
+        if (filtered.length === 0) {
+          questionDropdown.innerHTML =
+            "<option value='none'>No questions match filters</option>";
           document.getElementById("output").innerHTML =
             "<p>No questions match the selected filters.</p>";
+        } else {
+          filtered.forEach((q) => {
+            const option = document.createElement("option");
+            option.value = q.id;
+
+            // Determine match status indicator
+            let matchStatus = "";
+            if (typeof q.models_count !== "undefined") {
+              const matchRatio =
+                q.models_count > 0 ? q.matching_models / q.models_count : 0;
+
+              if (matchRatio === 1) matchStatus = "✅ ";
+              else if (matchRatio >= 0.5) matchStatus = "🟡 ";
+              else matchStatus = "❌ ";
+            }
+
+            // Format the question position/name based on file context
+            let positionDisplay = "";
+            if (
+              filePathFilter &&
+              filePathFilter !== "all" &&
+              "array_order" in q
+            ) {
+              // When filtering by file, show the position in file
+              const positionNum = q.array_order;
+
+              // Add rep indicator if it's a representative of a duplicate
+              const repIndicator =
+                q.source_type === "duplicate" ? " (rep)" : "";
+
+              positionDisplay = `${positionNum}${repIndicator}: `;
+            } else {
+              // When not filtering by file, show the ID
+              positionDisplay = `#${q.id}: `;
+            }
+
+            // Add file path info if available
+            let fileInfo = "";
+            if (
+              q.representative_file_path &&
+              (!filePathFilter || filePathFilter === "all")
+            ) {
+              const fileName = q.representative_file_path.split("/").pop();
+              fileInfo = ` [${fileName}]`;
+            }
+
+            // Create label with position, text, and file info
+            const maxTextLength = 100;
+            const truncatedText =
+              q.enhanced_text.length > maxTextLength
+                ? q.enhanced_text.substr(0, maxTextLength) + "..."
+                : q.enhanced_text;
+
+            option.textContent = `${matchStatus}${positionDisplay}${truncatedText}${fileInfo}`;
+
+            // Set custom styling based on status
+            if (q.status === "verified") option.className = "verified-option";
+            else if (q.status === "likely_correct")
+              option.className = "likely-option";
+            else if (q.status === "needs_review")
+              option.className = "review-option";
+            else if (q.status === "incorrect")
+              option.className = "incorrect-option";
+            else if (q.status === "corrected")
+              option.className = "corrected-option";
+
+            questionDropdown.appendChild(option);
+          });
+
+          // Display first question if any
+          questionDropdown.selectedIndex = 0;
+          displayQuestionDetails(filtered[0].id);
         }
       }
 
@@ -384,6 +502,14 @@
           }</span> | <strong>Category:</strong> <span style="color: ${catColor}">${
             q.category
           }</span></p>`;
+
+          // Add file path if available
+          if (q.file_path) {
+            const fileName = q.file_path.split("/").pop();
+            html += ` | <strong>File:</strong> <span title="${q.file_path}" class="file-path">${fileName}</span>`;
+          }
+
+          html += `</p>`;
 
           // Add Mark as Corrected button
           if (q.status !== "corrected") {
@@ -511,10 +637,75 @@
                   section.classList.contains("collapsed") ? "▼" : "▲";
               });
             });
+
+          const navContainer = document.createElement("div");
+          navContainer.className = "question-nav";
+          navContainer.innerHTML = `
+  <button class="nav-prev" title="Previous Question (Left Arrow)" aria-label="Previous Question">
+    <i class="fas fa-chevron-left"></i>
+  </button>
+  <button class="nav-next" title="Next Question (Right Arrow)" aria-label="Next Question">
+    <i class="fas fa-chevron-right"></i>
+  </button>
+`;
+
+          // Remove any existing navigation
+          const existingNav = document.querySelector(".question-nav");
+          if (existingNav) {
+            existingNav.remove();
+          }
+
+          // Add to body for fixed positioning
+          document.body.appendChild(navContainer);
+
+          // Set up navigation handlers
+          setupQuestionNavigation(questionId);
         } catch (err) {
           console.error("Error fetching details:", err);
           document.getElementById("output").innerHTML =
             "<p>Error loading details.</p>";
+        }
+      }
+
+      function setupQuestionNavigation(currentQuestionId) {
+        const questionDropdown = document.getElementById("questionDropdown");
+        const currentIndex = Array.from(questionDropdown.options).findIndex(
+          (option) => option.value === currentQuestionId.toString()
+        );
+
+        const prevButton = document.querySelector(".nav-prev");
+        const nextButton = document.querySelector(".nav-next");
+
+        // Clear existing event listeners (to prevent duplicates)
+        prevButton.replaceWith(prevButton.cloneNode(true));
+        nextButton.replaceWith(nextButton.cloneNode(true));
+
+        // Get fresh references after cloning
+        const freshPrevButton = document.querySelector(".nav-prev");
+        const freshNextButton = document.querySelector(".nav-next");
+
+        // Disable buttons if at first/last question
+        if (currentIndex <= 0) {
+          freshPrevButton.classList.add("nav-disabled");
+        } else {
+          freshPrevButton.classList.remove("nav-disabled");
+          freshPrevButton.addEventListener("click", () => {
+            questionDropdown.selectedIndex = currentIndex - 1;
+            displayQuestionDetails(questionDropdown.value);
+          });
+        }
+
+        if (
+          currentIndex >= questionDropdown.options.length - 1 ||
+          currentIndex === -1
+        ) {
+          freshNextButton.classList.add("nav-disabled");
+        } else {
+          freshNextButton.classList.remove("nav-disabled");
+          freshNextButton.addEventListener("click", () => {
+            questionDropdown.selectedIndex = currentIndex + 1;
+            displayQuestionDetails(questionDropdown.value);
+          });
         }
       }
 
@@ -951,6 +1142,9 @@
         .addEventListener("change", (e) =>
           displayQuestionDetails(e.target.value)
         );
+      document
+        .getElementById("filePathDropdown")
+        .addEventListener("change", fetchQuestions);
 
       async function uploadImage(questionId, input) {
         if (!input.files || input.files.length === 0) return;
