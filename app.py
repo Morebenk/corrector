@@ -56,8 +56,8 @@ def get_questions():
     try:
         with engine.connect() as conn:
             if file_path_filter:
-                # Optimized query to get only enhanced questions that appear in the selected file
-                # with their correct array_order, sorted by array_order
+                # Optimized query to get enhanced questions that appear in the selected file
+                # Modified to LEFT JOIN with verification_results to include questions without verification data
                 file_filtered_query = text("""
                     -- Get only the enhanced questions that have representatives in the specified file
                     SELECT 
@@ -78,7 +78,8 @@ def get_questions():
                         SUM(CASE WHEN vr.matches_expected IS TRUE THEN 1 ELSE 0 END) AS matching_models
                     FROM enhanced_questions eq
                     JOIN questions q ON q.id = eq.question_id
-                    JOIN verification_results vr ON eq.id = vr.question_id
+                    -- LEFT JOIN to include questions without verification results
+                    LEFT JOIN verification_results vr ON eq.id = vr.question_id
                     -- Look for direct questions in this file
                     LEFT JOIN questions q_direct ON 
                         q_direct.id = eq.question_id AND 
@@ -102,7 +103,7 @@ def get_questions():
                 
             else:
                 # No file filter - get all questions
-                # Here we don't sort by status anymore, just by ID as a default order
+                # Modified to LEFT JOIN with verification_results
                 main_query = text("""
                     SELECT 
                         eq.id,
@@ -117,7 +118,7 @@ def get_questions():
                         SUM(CASE WHEN vr.matches_expected IS TRUE THEN 1 ELSE 0 END) AS matching_models
                     FROM enhanced_questions eq
                     JOIN questions q ON q.id = eq.question_id
-                    JOIN verification_results vr ON eq.id = vr.question_id
+                    LEFT JOIN verification_results vr ON eq.id = vr.question_id
                     GROUP BY eq.id, eq.question_id, eq.enhanced_text, eq.category, eq.status, eq.requires_image, eq.image_url, q.file_path
                     ORDER BY eq.id
                 """)
@@ -152,7 +153,6 @@ def get_questions():
     except SQLAlchemyError as e:
         logger.exception("Database error in get_questions")
         return jsonify({'error': f'Database error: {str(e)}'}), 500
-
 
 
 @app.route('/api/question/<int:question_id>', methods=['GET'])
@@ -216,8 +216,8 @@ def get_question_details(question_id):
                     'question_type': question_type
                 })
             
-            # Get verification results
-            df_results = pd.read_sql_query(text("""
+            # Get verification results if any exist
+            verification_results_query = text("""
                 SELECT 
                     vr.model_name,
                     vr.selected_index,
@@ -228,7 +228,21 @@ def get_question_details(question_id):
                 FROM verification_results vr
                 WHERE vr.question_id = :question_id
                 ORDER BY vr.model_name
-            """), conn, params={'question_id': question_id})
+            """)
+            
+            verification_results = conn.execute(verification_results_query, {'question_id': question_id}).fetchall()
+            
+            # Check if verification results exist
+            if verification_results:
+                df_results = pd.DataFrame(verification_results, columns=[
+                    'model_name', 'selected_index', 'expected_index', 
+                    'matches_expected', 'suggested_answer', 'error'
+                ])
+                models_count = len(df_results)
+                verification_results_dict = df_results.to_dict(orient='records')
+            else:
+                models_count = 0
+                verification_results_dict = []
         
         return jsonify({
             'id': question_id,
@@ -243,13 +257,13 @@ def get_question_details(question_id):
             'file_locations': file_locations,
             'choices': choices_text.split('||') if choices_text else [],
             'is_correct': is_correct_text.split('||') if is_correct_text else [],
-            'models_count': int(df_results.shape[0]),
-            'verification_results': df_results.to_dict(orient='records')
+            'models_count': models_count,
+            'verification_results': verification_results_dict
         })
     except SQLAlchemyError as e:
         logger.exception("Database error in get_question_details")
         return jsonify({'error': f'Database error: {str(e)}'}), 500
-
+    
 
 @app.route('/api/question/<int:question_id>', methods=['POST'])
 def update_question(question_id):

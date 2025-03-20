@@ -352,13 +352,14 @@
 
             // Determine match status indicator
             let matchStatus = "";
-            if (typeof q.models_count !== "undefined") {
-              const matchRatio =
-                q.models_count > 0 ? q.matching_models / q.models_count : 0;
-
+            // Check if verification data exists (handles both null and undefined)
+            if (q.models_count && q.models_count > 0) {
+              const matchRatio = q.matching_models / q.models_count;
               if (matchRatio === 1) matchStatus = "✅ ";
               else if (matchRatio >= 0.5) matchStatus = "🟡 ";
               else matchStatus = "❌ ";
+            } else {
+              matchStatus = "⚪ "; // Use a neutral indicator for questions without verification
             }
 
             // Format the question position/name based on file context
