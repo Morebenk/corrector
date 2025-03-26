@@ -8,6 +8,7 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.exc import SQLAlchemyError
 from google import genai
 from dotenv import load_dotenv
+import uuid
 
 # Load environment variables from a .env file if present
 load_dotenv()
@@ -159,6 +160,15 @@ def get_questions():
 def get_question_details(question_id):
     try:
         with engine.connect() as conn:
+            # First, check if the question exists
+            existence_check = conn.execute(text("""
+                SELECT EXISTS(SELECT 1 FROM enhanced_questions WHERE id = :question_id) as exists
+            """), {'question_id': question_id}).fetchone()
+            
+            if not existence_check or not existence_check[0]:
+                logger.warning(f"Question {question_id} not found in enhanced_questions table")
+                return jsonify({'error': 'Question not found'}), 404
+                
             # First, get the basic question data
             result = conn.execute(text("""
                 SELECT eq.enhanced_text, eq.category, eq.status, eq.explanation,
@@ -168,7 +178,7 @@ def get_question_details(question_id):
                        STRING_AGG(ec.is_correct::TEXT, '||') AS is_correct
                 FROM enhanced_questions eq
                 JOIN questions q ON q.id = eq.question_id
-                JOIN enhanced_choices ec ON eq.id = ec.enhanced_question_id
+                LEFT JOIN enhanced_choices ec ON eq.id = ec.enhanced_question_id
                 WHERE eq.id = :question_id
                 GROUP BY eq.id, eq.enhanced_text, eq.category, eq.status, eq.explanation, 
                          eq.requires_image, eq.image_url, q.id, q.file_path
@@ -176,6 +186,26 @@ def get_question_details(question_id):
             
             row = result.fetchone()
             if not row:
+                logger.warning(f"Question {question_id} found in enhanced_questions but join query returned no results")
+                
+                # Try a more basic query to diagnose the issue
+                basic_info = conn.execute(text("""
+                    SELECT eq.id, eq.question_id, eq.enhanced_text FROM enhanced_questions eq
+                    WHERE eq.id = :question_id
+                """), {'question_id': question_id}).fetchone()
+                
+                if basic_info:
+                    logger.info(f"Found basic info for question {question_id}: question_id={basic_info[1]}")
+                    
+                    # Check if the original question exists
+                    original_exists = conn.execute(text("""
+                        SELECT EXISTS(SELECT 1 FROM questions WHERE id = :question_id) as exists
+                    """), {'question_id': basic_info[1]}).fetchone()
+                    
+                    if not original_exists or not original_exists[0]:
+                        logger.error(f"Original question {basic_info[1]} referenced by enhanced question {question_id} does not exist")
+                        return jsonify({'error': 'Original question not found for this enhanced question'}), 404
+                
                 return jsonify({'error': 'Question not found'}), 404
                 
             q_text, category, status, explanation, requires_image, image_url, original_question_id, rep_file_path, choices_text, is_correct_text = row
@@ -263,7 +293,9 @@ def get_question_details(question_id):
     except SQLAlchemyError as e:
         logger.exception("Database error in get_question_details")
         return jsonify({'error': f'Database error: {str(e)}'}), 500
-    
+
+
+
 
 @app.route('/api/question/<int:question_id>', methods=['POST'])
 def update_question(question_id):
@@ -398,6 +430,9 @@ def update_question(question_id):
         return jsonify({'status': 'error', 'error': f'Database error: {str(e)}'}), 500
 
 
+
+
+
 @app.route('/api/generate_explanation', methods=['POST'])
 def generate_explanation():
     data = request.get_json()
@@ -446,108 +481,216 @@ def mark_question_corrected(question_id):
 @app.route('/api/question/<int:question_id>/image', methods=['POST', 'DELETE'])
 def handle_image(question_id):
     import boto3
+    import os
+    import logging
     from werkzeug.utils import secure_filename
-    import uuid
 
-    s3 = boto3.client(
-        's3',
-        aws_access_key_id=os.environ.get('AWS_ACCESS_KEY_ID'),
-        aws_secret_access_key=os.environ.get('AWS_SECRET_ACCESS_KEY'),
-        region_name=os.environ.get('AWS_REGION')
-    )
-    bucket_name = os.environ.get('S3_BUCKET')
-    cloudfront_domain = os.environ.get('CLOUDFRONT_DOMAIN')
+    # For debugging
+    logger.info(f"Image request for question {question_id}, method: {request.method}")
+    
+    # Initialize S3 client if needed
+    s3 = None
+    bucket_name = None
+    cloudfront_domain = None
+    
+    # Only initialize S3 if we need it for file uploads
+    if request.method == 'POST' and not request.is_json:
+        s3 = boto3.client(
+            's3',
+            aws_access_key_id=os.environ.get('AWS_ACCESS_KEY_ID'),
+            aws_secret_access_key=os.environ.get('AWS_SECRET_ACCESS_KEY'),
+            region_name=os.environ.get('AWS_REGION')
+        )
+        bucket_name = os.environ.get('S3_BUCKET')
+        cloudfront_domain = os.environ.get('CLOUDFRONT_DOMAIN')
 
     if request.method == 'POST':
+        # For debugging
+        logger.info(f"POST request content type: {request.content_type}")
+        
+        # Check if the request contains JSON data (image URL)
+        if request.is_json:
+            try:
+                data = request.get_json()
+                logger.info(f"JSON data received: {data}")
+                
+                image_url = data.get('image_url')
+                
+                if not image_url:
+                    logger.error("No image URL provided in JSON")
+                    return jsonify({'status': 'error', 'error': 'No image URL provided'}), 400
+                    
+                # Update database with the image URL
+                try:
+                    with engine.begin() as conn:
+                        conn.execute(text("""
+                            UPDATE enhanced_questions
+                            SET image_url = :image_url, requires_image = TRUE
+                            WHERE id = :question_id
+                        """), {
+                            'question_id': question_id,
+                            'image_url': image_url
+                        })
+                        
+                    logger.info(f"Successfully updated image URL for question {question_id}")
+                    return jsonify({
+                        'status': 'success',
+                        'image_url': image_url
+                    })
+                except Exception as e:
+                    logger.exception(f"Error updating image URL: {str(e)}")
+                    return jsonify({'status': 'error', 'error': str(e)}), 500
+            except Exception as json_error:
+                logger.exception(f"Error parsing JSON: {str(json_error)}")
+                return jsonify({'status': 'error', 'error': f'Invalid JSON: {str(json_error)}'}), 400
+        
+        # Handle file upload
+        logger.info("Checking for file upload")
         if 'image' not in request.files:
+            logger.error("No image file in request")
             return jsonify({'status': 'error', 'error': 'No image file provided'}), 400
         
         file = request.files['image']
         if file.filename == '':
-            return jsonify({'status': 'error', 'error': 'No selected file'}), 400
+            logger.error("Empty filename")
+            return jsonify({'status': 'error', 'error': 'No file selected'}), 400
 
         if file:
             try:
+                # Generate a unique filename to prevent overwriting
                 filename = secure_filename(file.filename)
-                unique_filename = f"{uuid.uuid4()}_{filename}"
-
+                file_ext = os.path.splitext(filename)[1]
+                unique_filename = f"question_{question_id}_{uuid.uuid4().hex}{file_ext}"
+                
                 # Upload to S3
                 s3.upload_fileobj(
                     file,
                     bucket_name,
-                    unique_filename,
-                    ExtraArgs={
-                        'ContentType': file.content_type,
-                        'CacheControl': 'max-age=31536000'  # Cache for 1 year
-                    }
+                    f"question_images/{unique_filename}",
+                    ExtraArgs={'ContentType': file.content_type}
                 )
-
-                # Generate CloudFront URL
-                image_url = f"https://{cloudfront_domain}/{unique_filename}"
-
+                
+                # Generate URL (using CloudFront if available)
+                if cloudfront_domain:
+                    image_url = f"https://{cloudfront_domain}/question_images/{unique_filename}"
+                else:
+                    image_url = f"https://{bucket_name}.s3.amazonaws.com/question_images/{unique_filename}"
+                
                 # Update database
                 with engine.begin() as conn:
-                    # Get current image URL to delete old image if exists
-                    result = conn.execute(text("""
-                        SELECT image_url FROM enhanced_questions WHERE id = :question_id
-                    """), {'question_id': question_id})
-                    old_image = result.scalar()
-
-                    # Update with new image URL
                     conn.execute(text("""
                         UPDATE enhanced_questions
-                        SET image_url = :image_url
+                        SET image_url = :image_url, requires_image = TRUE
                         WHERE id = :question_id
                     """), {
                         'question_id': question_id,
                         'image_url': image_url
                     })
-
-                    # Delete old image if exists
-                    if old_image:
-                        try:
-                            old_key = old_image.split('/')[-1]
-                            s3.delete_object(Bucket=bucket_name, Key=old_key)
-                        except Exception as e:
-                            logger.warning(f"Failed to delete old image: {str(e)}")
-
+                
                 return jsonify({
                     'status': 'success',
                     'image_url': image_url
                 })
-
             except Exception as e:
-                logger.exception("Error handling image upload")
+                logger.exception(f"Error uploading image: {str(e)}")
                 return jsonify({'status': 'error', 'error': str(e)}), 500
+        else:
+            logger.error("File validation failed")
+            return jsonify({'status': 'error', 'error': 'Invalid file'}), 400
 
     elif request.method == 'DELETE':
         try:
+            logger.info(f"Deleting image for question {question_id}")
             with engine.begin() as conn:
-                # Get current image URL
-                result = conn.execute(text("""
-                    SELECT image_url FROM enhanced_questions WHERE id = :question_id
+                # Remove image URL from database but don't change requires_image flag
+                conn.execute(text("""
+                    UPDATE enhanced_questions
+                    SET image_url = NULL
+                    WHERE id = :question_id
                 """), {'question_id': question_id})
-                current_image = result.scalar()
-
-                if current_image:
-                    # Delete from S3
-                    image_key = current_image.split('/')[-1]
-                    s3.delete_object(Bucket=bucket_name, Key=image_key)
-
-                    # Clear image URL in database
-                    conn.execute(text("""
-                        UPDATE enhanced_questions
-                        SET image_url = NULL
-                        WHERE id = :question_id
-                    """), {'question_id': question_id})
-
-                return jsonify({'status': 'success'})
-
+                
+            logger.info(f"Image removed for question {question_id}")
+            return jsonify({'status': 'success'})
         except Exception as e:
-            logger.exception("Error handling image deletion")
+            logger.exception(f"Error handling image deletion: {str(e)}")
             return jsonify({'status': 'error', 'error': str(e)}), 500
 
-# Add this new endpoint after the /api/questions endpoint
+@app.route('/api/image_files', methods=['GET'])
+def get_image_files():
+    """Get the list of files that have images in the database"""
+    try:
+        with engine.connect() as conn:
+            query = text("""
+                SELECT DISTINCT source_file 
+                FROM public.extracted_images
+                ORDER BY source_file
+            """)
+            
+            result = conn.execute(query)
+            files = [row[0] for row in result]
+            
+            return jsonify({'files': files})
+            
+    except Exception as e:
+        logger.exception("Error getting image files")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/file_images', methods=['GET'])
+def get_file_images():
+    """Get images for a specific file and page"""
+    file_path = request.args.get('file_path')
+    page = request.args.get('page', '1')
+    
+    if not file_path:
+        return jsonify({'error': 'Missing file_path parameter'}), 400
+        
+    try:
+        page = int(page)
+        
+        with engine.connect() as conn:
+            # First get the total number of pages for this file
+            count_query = text("""
+                SELECT MAX(page_number) as total_pages
+                FROM public.extracted_images
+                WHERE source_file = :source_file
+            """)
+            
+            total_result = conn.execute(count_query, {'source_file': file_path}).fetchone()
+            total_pages = total_result[0] if total_result and total_result[0] else 1
+            
+            # Now get images for the requested page
+            query = text("""
+                SELECT id, source_file, page_number, image_path, s3_url, question_number
+                FROM public.extracted_images
+                WHERE source_file = :source_file AND page_number = :page_number
+                ORDER BY question_number NULLS LAST, image_path
+            """)
+            
+            result = conn.execute(query, {
+                'source_file': file_path,
+                'page_number': page
+            })
+            
+            images = []
+            for row in result:
+                images.append({
+                    'id': row.id,
+                    'source_file': row.source_file,
+                    'page_number': row.page_number,
+                    'image_path': row.image_path,
+                    'url': row.s3_url,
+                    'question_number': row.question_number
+                })
+            
+            return jsonify({
+                'images': images,
+                'total_pages': total_pages,
+                'current_page': page
+            })
+            
+    except Exception as e:
+        logger.exception("Error getting file images")
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/files', methods=['GET'])
 def get_all_files():
@@ -571,6 +714,7 @@ def get_all_files():
     except SQLAlchemyError as e:
         logger.exception("Database error in get_all_files")
         return jsonify({'error': f'Database error: {str(e)}'}), 500
+
 
 if __name__ == '__main__':
     # For production, use a WSGI server such as gunicorn.

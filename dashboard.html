@@ -28,10 +28,55 @@
     <!-- Base styles -->
     <link rel="stylesheet" href="styles.css" />
   </head>
+  <!-- Image Preview Modal -->
+  <div id="imagePreviewModal" class="image-preview-modal">
+    <div class="preview-container">
+      <div class="preview-header">
+        <h3>Image Preview</h3>
+        <button class="close-preview">&times;</button>
+      </div>
+      <img id="previewImage" src="" alt="Image Preview" />
+      <div class="preview-actions">
+        <button class="select-preview-image">Select This Image</button>
+        <button class="cancel-preview">Cancel</button>
+      </div>
+    </div>
+  </div>
+
   <body>
     <!-- Image Modal -->
     <div id="imageModal" class="image-modal">
       <img class="modal-content" id="modalImage" />
+    </div>
+
+    <!-- Image Browser Modal -->
+    <div id="imageBrowserModal" class="image-browser-modal">
+      <div class="image-browser-content">
+        <div class="image-browser-header">
+          <h2>Select Image</h2>
+          <button class="close-modal">&times;</button>
+        </div>
+        <div class="image-browser-body">
+          <div class="file-selector">
+            <select id="imageFileSelect">
+              <option value="">Select a file</option>
+            </select>
+          </div>
+          <div class="page-selector">
+            <button class="page-nav prev-page" disabled>
+              <i class="fas fa-chevron-left"></i>
+            </button>
+            <span class="page-info"
+              >Page <span id="currentPage">1</span> of
+              <span id="totalPages">1</span></span
+            >
+            <button class="page-nav next-page" disabled>
+              <i class="fas fa-chevron-right"></i>
+            </button>
+          </div>
+          <div class="images-grid"></div>
+        </div>
+      </div>
     </div>
 
     <div class="container">
@@ -564,33 +609,42 @@
 
           html += `<p>${q.enhanced_text}</p>`;
 
-          // Add image requirement and handling
-          html += `<div class="image-section">`;
-          html += `<p class="image-requirement ${
-            q.requires_image ? "required" : "not-required"
-          }">
-              <i class="fas fa-image"></i> Image ${
-                q.requires_image ? "Required" : "Not Required"
-              }
-          </p>`;
+          // Image section
+          html += `<div class="image-section">
+  <div class="image-requirement ${
+    q.requires_image ? "required" : "not-required"
+  }">
+    <i class="fas fa-${q.requires_image ? "check-circle" : "info-circle"}"></i>
+    ${
+      q.requires_image
+        ? "This question requires an image"
+        : "This question does not require an image"
+    }
+  </div>`;
 
           if (q.image_url) {
             html += `<div class="image-container">
-                  <img src="${q.image_url}" alt="Question Image" class="question-image" onclick="openImageModal('${q.image_url}')"/>
-                  <button onclick="removeImage(${q.id})" class="image-remove-btn">
-                      <i class="fas fa-trash"></i> Remove Image
-                  </button>
-              </div>`;
+      <img src="${q.image_url}" alt="Question Image" class="question-image" onclick="openImageModal('${q.image_url}')"/>
+      <div class="image-buttons">
+        <button onclick="openImageBrowser(${q.id})" class="image-button browse-button">
+          <i class="fas fa-images"></i> Browse Images
+        </button>
+        <button onclick="removeImage(${q.id})" class="image-button remove-button">
+          <i class="fas fa-trash"></i> Remove Image
+        </button>
+      </div>
+    </div>`;
           } else {
-            html += `<div class="image-upload">
-                  <label for="imageFile" class="image-upload-label">
-                      <i class="fas fa-cloud-upload-alt"></i> Upload Image
-                  </label>
-                  <input type="file" id="imageFile" accept="image/*" onchange="uploadImage(${q.id}, this)" style="display: none;"/>
-              </div>`;
+            html += `<div class="image-buttons">
+      <button onclick="openImageBrowser(${q.id})" class="image-button browse-button">
+        <i class="fas fa-images"></i> Select Image
+      </button>
+    </div>`;
           }
+
           html += `</div>`;
 
+          //choices section
           html += `<div class="section-title">Choices:</div>`;
           html += `<ul>`;
           const correctIndex = q.is_correct.findIndex(
@@ -1010,44 +1064,53 @@
         categoryDiv.appendChild(categorySelect);
         form.appendChild(categoryDiv);
 
-        // Add image section
-        const imageDiv = document.createElement("div");
-        imageDiv.classList.add("form-field", "image-section");
+        // Look for the section in renderEditForm that handles images
+        // Replace it with this code:
 
-        // Add requires_image checkbox at the top of image section
-        imageDiv.innerHTML = `
-          <label class="checkbox-label">
-            <input type="checkbox" name="requires_image" ${
-              q.requires_image ? "checked" : ""
-            }>
-            <span><strong>Requires Image</strong></span>
-          </label>
-        `;
+        // Image section in edit form
+        const imageSection = document.createElement("div");
+        imageSection.className = "form-field";
+        imageSection.innerHTML = `<label for="requiresImage">Image</label>`;
 
-        // Add image upload/display section
+        const requiresImageDiv = document.createElement("div");
+        requiresImageDiv.className = "checkbox-label";
+        requiresImageDiv.innerHTML = `
+  <input type="checkbox" id="requiresImage" name="requiresImage" ${
+    q.requires_image ? "checked" : ""
+  } />
+  <span>This question requires an image</span>
+`;
+        imageSection.appendChild(requiresImageDiv);
+
         const imageContentDiv = document.createElement("div");
-        imageContentDiv.classList.add("image-content");
+        imageContentDiv.className = "image-content-section";
+        imageSection.appendChild(imageContentDiv);
+
         if (q.image_url) {
           imageContentDiv.innerHTML = `
-            <div class="image-container">
-              <img src="${q.image_url}" alt="Question Image" class="question-image" onclick="openImageModal('${q.image_url}')"/>
-              <button type="button" onclick="removeImage(${q.id})" class="image-remove-btn">
-                <i class="fas fa-trash"></i> Remove Image
-              </button>
-            </div>
-          `;
+    <div class="image-container">
+      <img src="${q.image_url}" alt="Question Image" class="question-image" onclick="openImageModal('${q.image_url}')"/>
+      <div class="image-buttons">
+        <button type="button" onclick="openImageBrowser(${q.id})" class="image-button browse-button">
+          <i class="fas fa-images"></i> Browse Images
+        </button>
+        <button type="button" onclick="removeImage(${q.id})" class="image-button remove-button">
+          <i class="fas fa-trash"></i> Remove Image
+        </button>
+      </div>
+    </div>
+  `;
         } else {
           imageContentDiv.innerHTML = `
-            <div class="image-upload">
-              <label for="imageFile" class="image-upload-label">
-                <i class="fas fa-cloud-upload-alt"></i> Upload Image
-              </label>
-              <input type="file" id="imageFile" accept="image/*" onchange="uploadImage(${q.id}, this)" style="display: none;"/>
-            </div>
-          `;
+    <div class="image-buttons">
+      <button type="button" onclick="openImageBrowser(${q.id})" class="image-button browse-button">
+        <i class="fas fa-images"></i> Select Image
+      </button>
+    </div>
+  `;
         }
-        imageDiv.appendChild(imageContentDiv);
-        form.appendChild(imageDiv);
+
+        form.appendChild(imageSection);
 
         const choicesDiv = document.createElement("div");
         choicesDiv.classList.add("form-field");
@@ -1339,6 +1402,312 @@
           alert("Error removing image");
         }
       }
+
+      // Add this before fetchQuestions().then(...) at the end of your script section
+
+      // Image Browser Functions
+      let currentImagePage = 1;
+      let totalImagePages = 1;
+      let lastViewedPage = 1; // Remember last viewed page
+      const imageBrowserModal = document.getElementById("imageBrowserModal");
+      const imagesGrid = document.querySelector(".images-grid");
+      const prevPageBtn = document.querySelector(".prev-page");
+      const nextPageBtn = document.querySelector(".next-page");
+      const closeModalBtn = document.querySelector(".close-modal");
+      const imageFileSelect = document.getElementById("imageFileSelect");
+      let currentQuestionForImage = null;
+      let currentImageFile = null;
+
+      // Function to load available image files for the dropdown
+      async function loadImageFiles() {
+        try {
+          const response = await fetch("/api/image_files");
+          const data = await response.json();
+
+          // Clear dropdown except first option
+          while (imageFileSelect.options.length > 1) {
+            imageFileSelect.remove(1);
+          }
+
+          // Add file options
+          data.files.forEach((file) => {
+            const option = document.createElement("option");
+            option.value = file;
+
+            // Display just the filename, not the full path
+            const fileName = file.split("/").pop();
+            option.textContent = fileName;
+            option.title = file; // Show full path on hover
+
+            imageFileSelect.appendChild(option);
+          });
+        } catch (err) {
+          console.error("Error loading image files:", err);
+        }
+      }
+
+      // Function to load images for a specific file and page
+      async function loadImages(file, page = 1) {
+        try {
+          const response = await fetch(
+            `/api/file_images?file_path=${encodeURIComponent(
+              file
+            )}&page=${page}`
+          );
+          const data = await response.json();
+
+          currentImagePage = data.current_page;
+          totalImagePages = data.total_pages;
+          document.getElementById("currentPage").textContent = currentImagePage;
+          document.getElementById("totalPages").textContent = totalImagePages;
+
+          // Update navigation buttons
+          prevPageBtn.disabled = currentImagePage <= 1;
+          nextPageBtn.disabled = currentImagePage >= totalImagePages;
+
+          // Display images
+          imagesGrid.innerHTML = "";
+          data.images.forEach((image) => {
+            const imgDiv = document.createElement("div");
+            imgDiv.className = "image-item";
+
+            // Create image element
+            const img = document.createElement("img");
+            img.src = image.url;
+            img.alt = `Image ${image.question_number || ""}`;
+            img.loading = "lazy";
+
+            // Add click handler to show preview
+            imgDiv.addEventListener("click", () => showImagePreview(image));
+
+            // Add info label
+            const infoDiv = document.createElement("div");
+            infoDiv.className = "image-info";
+            infoDiv.textContent = image.question_number
+              ? `Question ${image.question_number}`
+              : `Image ${image.id}`;
+
+            // Add hover zoom effect container
+            const zoomContainer = document.createElement("div");
+            zoomContainer.className = "zoom-container";
+            zoomContainer.appendChild(img);
+
+            // Add preview icon
+            const previewIcon = document.createElement("div");
+            previewIcon.className = "preview-icon";
+            previewIcon.innerHTML = '<i class="fas fa-search-plus"></i>';
+
+            imgDiv.appendChild(zoomContainer);
+            imgDiv.appendChild(previewIcon);
+            imgDiv.appendChild(infoDiv);
+            imagesGrid.appendChild(imgDiv);
+          });
+        } catch (err) {
+          console.error("Error loading images:", err);
+          imagesGrid.innerHTML =
+            '<div class="error-message">Error loading images</div>';
+        }
+      }
+
+      // Function to open the image browser
+      function openImageBrowser(questionId) {
+        currentQuestionForImage = questionId;
+        imageBrowserModal.classList.add("active");
+
+        // Load image files if not already loaded
+        if (imageFileSelect.options.length <= 1) {
+          loadImageFiles();
+        }
+
+        // Restore last selected file and page
+        const lastFile = localStorage.getItem("lastImageFile");
+        const lastPage = parseInt(localStorage.getItem("lastImagePage")) || 1;
+
+        if (lastFile) {
+          setTimeout(() => {
+            imageFileSelect.value = lastFile;
+            loadImages(lastFile, lastPage);
+          }, 100); // Small delay to ensure options are loaded
+        }
+
+        // Hide navigation footer
+        const nav = document.querySelector(".question-nav");
+        if (nav) {
+          nav.style.display = "none";
+        }
+
+        document.body.style.overflow = "hidden"; // Prevent scrolling
+      }
+
+      // Function to close the image browser
+      function closeImageBrowser() {
+        imageBrowserModal.classList.remove("active");
+        document.body.style.overflow = ""; // Restore scrolling
+
+        // Show navigation footer
+        const nav = document.querySelector(".question-nav");
+        if (nav) {
+          nav.style.display = "flex";
+        }
+      }
+
+      // Function to show image preview
+      function showImagePreview(image) {
+        const previewModal = document.getElementById("imagePreviewModal");
+        const previewImage = document.getElementById("previewImage");
+
+        previewImage.src = image.url;
+        previewModal.style.display = "flex";
+        document.body.style.overflow = "hidden";
+
+        // Setup preview actions
+        const selectBtn = previewModal.querySelector(".select-preview-image");
+        const cancelBtn = previewModal.querySelector(".cancel-preview");
+        const closeBtn = previewModal.querySelector(".close-preview");
+
+        const closePreview = () => {
+          previewModal.style.display = "none";
+          document.body.style.overflow = "";
+          // Show navigation footer since we're going back to main view
+          const nav = document.querySelector(".question-nav");
+          if (nav) {
+            nav.style.display = "flex";
+          }
+        };
+
+        selectBtn.onclick = async () => {
+          if (!currentQuestionForImage) return;
+
+          try {
+            const response = await fetch(
+              `/api/question/${currentQuestionForImage}/image`,
+              {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify({ image_url: image.url }),
+              }
+            );
+
+            if (!response.ok) {
+              const errorText = await response.text();
+              throw new Error(
+                `Server responded with ${response.status}: ${errorText}`
+              );
+            }
+
+            const result = await response.json();
+            if (result.status === "success") {
+              // Store last viewed page and file
+              localStorage.setItem(
+                "lastImagePage",
+                currentImagePage.toString()
+              );
+              localStorage.setItem("lastImageFile", imageFileSelect.value);
+
+              // Refresh the question display
+              displayQuestionDetails(currentQuestionForImage);
+              closePreview();
+              closeImageBrowser();
+            } else {
+              alert(
+                "Error setting image: " + (result.error || "Unknown error")
+              );
+            }
+          } catch (err) {
+            console.error("Error setting image:", err);
+            alert("Error setting image: " + err.message);
+          }
+        };
+
+        cancelBtn.onclick = closePreview;
+        closeBtn.onclick = closePreview;
+
+        // Close on escape key
+        document.addEventListener("keydown", function escListener(e) {
+          if (e.key === "Escape") {
+            closePreview();
+            document.removeEventListener("keydown", escListener);
+          }
+        });
+
+        // Close on outside click
+        previewModal.addEventListener("click", function modalClick(e) {
+          if (e.target === previewModal) {
+            closePreview();
+            previewModal.removeEventListener("click", modalClick);
+          }
+        });
+      }
+
+      // Function to remove an image from a question
+      async function removeImage(questionId) {
+        if (!confirm("Are you sure you want to remove this image?")) {
+          return;
+        }
+
+        try {
+          const response = await fetch(`/api/question/${questionId}/image`, {
+            method: "DELETE",
+          });
+
+          const result = await response.json();
+          if (result.status === "success") {
+            // Refresh the question details
+            displayQuestionDetails(questionId);
+          } else {
+            alert("Error removing image: " + (result.error || "Unknown error"));
+          }
+        } catch (err) {
+          console.error("Error:", err);
+          alert("Error removing image");
+        }
+      }
+
+      // Event Listeners for the image browser
+      imageFileSelect.addEventListener("change", function () {
+        if (this.value) {
+          loadImages(this.value, 1); // Reset to page 1 when changing files
+        } else {
+          imagesGrid.innerHTML =
+            '<div class="select-file-message">Please select a file</div>';
+        }
+      });
+
+      prevPageBtn.addEventListener("click", () => {
+        if (currentImagePage > 1 && imageFileSelect.value) {
+          loadImages(imageFileSelect.value, currentImagePage - 1);
+        }
+      });
+
+      nextPageBtn.addEventListener("click", () => {
+        if (currentImagePage < totalImagePages && imageFileSelect.value) {
+          loadImages(imageFileSelect.value, currentImagePage + 1);
+        }
+      });
+
+      closeModalBtn.addEventListener("click", closeImageBrowser);
+
+      // Close modal when clicking outside the content
+      imageBrowserModal.addEventListener("click", (e) => {
+        if (e.target === imageBrowserModal) {
+          closeImageBrowser();
+        }
+      });
+
+      // Keyboard navigation
+      document.addEventListener("keydown", (e) => {
+        if (imageBrowserModal.classList.contains("active")) {
+          if (e.key === "Escape") {
+            closeImageBrowser();
+          } else if (e.key === "ArrowLeft" && !prevPageBtn.disabled) {
+            prevPageBtn.click();
+          } else if (e.key === "ArrowRight" && !nextPageBtn.disabled) {
+            nextPageBtn.click();
+          }
+        }
+      });
 
       fetchQuestions().then(() => loadFilters());
     </script>
