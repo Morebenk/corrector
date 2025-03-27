@@ -1064,53 +1064,44 @@
         categoryDiv.appendChild(categorySelect);
         form.appendChild(categoryDiv);
 
-        // Look for the section in renderEditForm that handles images
-        // Replace it with this code:
+        // Add image section
+        const imageDiv = document.createElement("div");
+        imageDiv.classList.add("form-field", "image-section");
 
-        // Image section in edit form
-        const imageSection = document.createElement("div");
-        imageSection.className = "form-field";
-        imageSection.innerHTML = `<label for="requiresImage">Image</label>`;
+        // Add requires_image checkbox at the top of image section
+        imageDiv.innerHTML = `
+          <label class="checkbox-label">
+            <input type="checkbox" name="requires_image" ${
+              q.requires_image ? "checked" : ""
+            }>
+            <span><strong>Requires Image</strong></span>
+          </label>
+        `;
 
-        const requiresImageDiv = document.createElement("div");
-        requiresImageDiv.className = "checkbox-label";
-        requiresImageDiv.innerHTML = `
-  <input type="checkbox" id="requiresImage" name="requiresImage" ${
-    q.requires_image ? "checked" : ""
-  } />
-  <span>This question requires an image</span>
-`;
-        imageSection.appendChild(requiresImageDiv);
-
+        // Add image upload/display section
         const imageContentDiv = document.createElement("div");
-        imageContentDiv.className = "image-content-section";
-        imageSection.appendChild(imageContentDiv);
-
+        imageContentDiv.classList.add("image-content");
         if (q.image_url) {
           imageContentDiv.innerHTML = `
-    <div class="image-container">
-      <img src="${q.image_url}" alt="Question Image" class="question-image" onclick="openImageModal('${q.image_url}')"/>
-      <div class="image-buttons">
-        <button type="button" onclick="openImageBrowser(${q.id})" class="image-button browse-button">
-          <i class="fas fa-images"></i> Browse Images
-        </button>
-        <button type="button" onclick="removeImage(${q.id})" class="image-button remove-button">
-          <i class="fas fa-trash"></i> Remove Image
-        </button>
-      </div>
-    </div>
-  `;
+            <div class="image-container">
+              <img src="${q.image_url}" alt="Question Image" class="question-image" onclick="openImageModal('${q.image_url}')"/>
+              <button type="button" onclick="removeImage(${q.id})" class="image-remove-btn">
+                <i class="fas fa-trash"></i> Remove Image
+              </button>
+            </div>
+          `;
         } else {
           imageContentDiv.innerHTML = `
-    <div class="image-buttons">
-      <button type="button" onclick="openImageBrowser(${q.id})" class="image-button browse-button">
-        <i class="fas fa-images"></i> Select Image
-      </button>
-    </div>
-  `;
+            <div class="image-upload">
+              <label for="imageFile" class="image-upload-label">
+                <i class="fas fa-cloud-upload-alt"></i> Upload Image
+              </label>
+              <input type="file" id="imageFile" accept="image/*" onchange="uploadImage(${q.id}, this)" style="display: none;"/>
+            </div>
+          `;
         }
-
-        form.appendChild(imageSection);
+        imageDiv.appendChild(imageContentDiv);
+        form.appendChild(imageDiv);
 
         const choicesDiv = document.createElement("div");
         choicesDiv.classList.add("form-field");
