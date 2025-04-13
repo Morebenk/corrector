@@ -2,18 +2,14 @@ Dashboard.currentImagePage = 1;
 Dashboard.currentQuestionForImage = null;
 Dashboard.currentImageFile = null;
 Dashboard.currentFileFilter = null;
+Dashboard.currentQuestionData = null;
 Dashboard.availablePages = [];
+Dashboard.imageCache = new Map();
 
 Dashboard.openImageBrowser = async function (
   questionId,
   filePathFilter = null
 ) {
-  console.log(
-    "Opening image browser for question ID:",
-    questionId,
-    "File filter:",
-    filePathFilter
-  );
   Dashboard.currentQuestionForImage = questionId;
   Dashboard.currentFileFilter = filePathFilter;
   const imageBrowserModal = document.getElementById("imageBrowserModal");
@@ -42,46 +38,31 @@ Dashboard.openImageBrowser = async function (
     );
     if (!response.ok)
       throw new Error(`Server responded with ${response.status}`);
-    const questionData = await response.json();
+    Dashboard.currentQuestionData = await response.json();
 
     let initialFile = null;
     let initialPage = null;
     let questionNumber = null;
 
-    // Prioritize duplicate's file and page if filePathFilter is provided
     if (filePathFilter) {
-      const location = questionData.file_locations.find(
+      const location = Dashboard.currentQuestionData.file_locations.find(
         (loc) => loc.file_path === filePathFilter
       );
       if (location) {
         initialFile = location.file_path;
         initialPage = location.page;
         questionNumber = location.question_number;
-        console.log(
-          `Using filtered file: ${initialFile}, page: ${initialPage}, question number: ${questionNumber}`
-        );
       } else {
-        console.warn(
-          `Filtered file ${filePathFilter} not found in file_locations:`,
-          questionData.file_locations
-        );
-        // Instead of falling back, use the filtered file path directly
         initialFile = filePathFilter;
-        // Fetch page and question number from representative as a fallback
-        initialPage = questionData.representative_page;
-        questionNumber = questionData.representative_question_number;
-        console.log(
-          `Using filePathFilter directly: ${initialFile}, fallback page: ${initialPage}, question number: ${questionNumber}`
-        );
+        initialPage = Dashboard.currentQuestionData.representative_page;
+        questionNumber =
+          Dashboard.currentQuestionData.representative_question_number;
       }
     } else {
-      // No filter provided, use representative
-      initialFile = questionData.representative_file_path;
-      initialPage = questionData.representative_page;
-      questionNumber = questionData.representative_question_number;
-      console.log(
-        `Using representative file: ${initialFile}, page: ${initialPage}, question number: ${questionNumber}`
-      );
+      initialFile = Dashboard.currentQuestionData.representative_file_path;
+      initialPage = Dashboard.currentQuestionData.representative_page;
+      questionNumber =
+        Dashboard.currentQuestionData.representative_question_number;
     }
 
     if (!initialFile || !initialPage) {
@@ -90,16 +71,14 @@ Dashboard.openImageBrowser = async function (
       return;
     }
 
-    // Populate file dropdown with all file_locations
     const imageFileSelect = document.getElementById("imageFileSelect");
     if (!imageFileSelect) {
-      console.error("Image file select not found");
       imagesGrid.innerHTML =
         '<div class="error-message">Image file selector not found</div>';
       return;
     }
     imageFileSelect.innerHTML = '<option value="">Select a file</option>';
-    questionData.file_locations.forEach((loc) => {
+    Dashboard.currentQuestionData.file_locations.forEach((loc) => {
       const option = document.createElement("option");
       option.value = loc.file_path;
       option.textContent = loc.file_path.split("/").pop();
@@ -113,70 +92,24 @@ Dashboard.openImageBrowser = async function (
     await Dashboard.loadImages(initialFile, initialPage, questionNumber);
     await Dashboard.loadAvailablePages(initialFile);
   } catch (err) {
-    console.error("Error loading question data for image browser:", err);
-    imagesGrid.innerHTML = `<div class="error-message">Error loading question data: ${err.message}</div>`;
-  }
-
-  const nav = document.querySelector(".question-nav");
-  if (nav) nav.style.display = "none";
-};
-
-Dashboard.closeImageBrowser = function () {
-  const imageBrowserModal = document.getElementById("imageBrowserModal");
-  if (imageBrowserModal) {
-    imageBrowserModal.classList.remove("active");
-    document.body.style.overflow = "";
-    const nav = document.querySelector(".question-nav");
-    if (nav) nav.style.display = "flex";
-  }
-};
-
-Dashboard.loadImageFiles = async function () {
-  const imageFileSelect = document.getElementById("imageFileSelect");
-  if (!imageFileSelect) {
-    console.error("Image file select not found in loadImageFiles");
-    return;
-  }
-  try {
-    const response = await fetch("/api/image_files");
-    if (!response.ok)
-      throw new Error(`Failed to fetch image files: ${response.status}`);
-    const data = await response.json();
-    while (imageFileSelect.options.length > 1) imageFileSelect.remove(1);
-    data.files.forEach((file) => {
-      const option = document.createElement("option");
-      option.value = file;
-      option.textContent = file.split("/").pop();
-      option.title = file;
-      imageFileSelect.appendChild(option);
-    });
-  } catch (err) {
-    console.error("Error loading image files:", err);
-  }
-};
-
-Dashboard.loadAvailablePages = async function (filePath) {
-  try {
-    const response = await fetch(
-      `/api/available_pages?file_path=${encodeURIComponent(filePath)}`
+    Dashboard.showError(
+      `Error loading question data: ${err.message}`,
+      "images-grid"
     );
-    if (!response.ok)
-      throw new Error(`Failed to fetch available pages: ${response.status}`);
-    const data = await response.json();
-    Dashboard.availablePages = data.pages || [];
-    Dashboard.updatePageNavigation();
-  } catch (err) {
-    console.error("Error loading available pages:", err);
-    Dashboard.availablePages = [];
-    Dashboard.updatePageNavigation();
   }
 };
 
 Dashboard.loadImages = async function (file, pageNumber, questionNumber) {
   const imagesGrid = document.querySelector(".images-grid");
   if (!imagesGrid) return;
-  imagesGrid.innerHTML = `<div class="loading-message">Loading images for page ${pageNumber}...</div>`;
+  const cacheKey = `${file}:${pageNumber}:${questionNumber || ""}`;
+  if (Dashboard.imageCache.has(cacheKey)) {
+    displayImageResults(Dashboard.imageCache.get(cacheKey), questionNumber);
+    Dashboard.updatePageNavigation();
+    return;
+  }
 
+  imagesGrid.innerHTML = `<div class="loading-message">Loading images for page ${pageNumber}...</div>`;
   try {
     const url = `/api/page_images?file_path=${encodeURIComponent(
       file
@@ -187,6 +120,7 @@ Dashboard.loadImages = async function (file, pageNumber, questionNumber) {
     if (!response.ok)
       throw new Error(`Server responded with ${response.status}`);
     const data = await response.json();
+    Dashboard.imageCache.set(cacheKey, data.images);
 
     const pageSelector = document.querySelector(".page-selector");
     if (pageSelector) {
@@ -240,8 +174,58 @@ Dashboard.loadImages = async function (file, pageNumber, questionNumber) {
 
     displayImageResults(data.images, questionNumber);
   } catch (err) {
-    console.error("Error loading images:", err);
-    imagesGrid.innerHTML = `<div class="error-message">Error loading images: ${err.message}</div>`;
+    Dashboard.showError(`Error loading images: ${err.message}`, "images-grid");
+  }
+};
+
+Dashboard.closeImageBrowser = function () {
+  const imageBrowserModal = document.getElementById("imageBrowserModal");
+  if (imageBrowserModal) {
+    imageBrowserModal.classList.remove("active");
+    document.body.style.overflow = "";
+    const nav = document.querySelector(".question-nav");
+    if (nav) nav.style.display = "flex";
+  }
+};
+
+Dashboard.loadImageFiles = async function () {
+  const imageFileSelect = document.getElementById("imageFileSelect");
+  if (!imageFileSelect) {
+    console.error("Image file select not found in loadImageFiles");
+    return;
+  }
+  try {
+    const response = await fetch("/api/image_files");
+    if (!response.ok)
+      throw new Error(`Failed to fetch image files: ${response.status}`);
+    const data = await response.json();
+    while (imageFileSelect.options.length > 1) imageFileSelect.remove(1);
+    data.files.forEach((file) => {
+      const option = document.createElement("option");
+      option.value = file;
+      option.textContent = file.split("/").pop();
+      option.title = file;
+      imageFileSelect.appendChild(option);
+    });
+  } catch (err) {
+    console.error("Error loading image files:", err);
+  }
+};
+
+Dashboard.loadAvailablePages = async function (filePath) {
+  try {
+    const response = await fetch(
+      `/api/available_pages?file_path=${encodeURIComponent(filePath)}`
+    );
+    if (!response.ok)
+      throw new Error(`Failed to fetch available pages: ${response.status}`);
+    const data = await response.json();
+    Dashboard.availablePages = data.pages || [];
+    Dashboard.updatePageNavigation();
+  } catch (err) {
+    console.error("Error loading available pages:", err);
+    Dashboard.availablePages = [];
+    Dashboard.updatePageNavigation();
   }
 };
 
@@ -385,50 +369,31 @@ document.addEventListener("DOMContentLoaded", () => {
     imageFileSelect.addEventListener("change", async function () {
       if (this.value && Dashboard.currentQuestionForImage) {
         Dashboard.currentImageFile = this.value;
-        try {
-          const response = await fetch(
-            `/api/question/${Dashboard.currentQuestionForImage}${
-              Dashboard.currentFileFilter
-                ? `?file_path=${encodeURIComponent(
-                    Dashboard.currentFileFilter
-                  )}`
-                : ""
-            }`
+        const location = Dashboard.currentQuestionData?.file_locations.find(
+          (loc) => loc.file_path === this.value
+        );
+        const pageToLoad = location
+          ? location.page
+          : Dashboard.currentQuestionData?.representative_page;
+        if (pageToLoad) {
+          Dashboard.currentImagePage = pageToLoad;
+          Dashboard.loadImages(
+            this.value,
+            pageToLoad,
+            location
+              ? location.question_number
+              : Dashboard.currentQuestionData?.representative_question_number
           );
-          const questionData = await response.json();
-          const location = questionData.file_locations.find(
-            (loc) => loc.file_path === this.value
-          );
-          const pageToLoad = location
-            ? location.page
-            : questionData.representative_page;
-          if (pageToLoad) {
-            Dashboard.currentImagePage = pageToLoad;
-            Dashboard.loadImages(
-              this.value,
-              pageToLoad,
-              location
-                ? location.question_number
-                : questionData.representative_question_number
-            );
-            Dashboard.loadAvailablePages(this.value);
-          } else {
-            document.querySelector(".images-grid").innerHTML =
-              '<div class="error-message">No page information for this file</div>';
-          }
-        } catch (err) {
-          console.error("Error fetching question data:", err);
-          document.querySelector(
-            ".images-grid"
-          ).innerHTML = `<div class="error-message">Error: ${err.message}</div>`;
+          Dashboard.loadAvailablePages(this.value);
+        } else {
+          document.querySelector(".images-grid").innerHTML =
+            '<div class="error-message">No page information for this file</div>';
         }
       } else if (!this.value) {
         document.querySelector(".images-grid").innerHTML =
           '<div class="select-file-message">Please select a file</div>';
       }
     });
-  } else {
-    console.warn("imageFileSelect not found on DOM load");
   }
 
   const closeModal = document.querySelector(".close-modal");
@@ -440,8 +405,6 @@ document.addEventListener("DOMContentLoaded", () => {
     imageBrowserModal.addEventListener("click", (e) => {
       if (e.target === imageBrowserModal) Dashboard.closeImageBrowser();
     });
-  } else {
-    console.warn("imageBrowserModal not found on DOM load");
   }
 
   document.addEventListener("keydown", (e) => {

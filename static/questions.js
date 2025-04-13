@@ -1,31 +1,49 @@
+// Utility to display errors
+Dashboard.showError = function (message, elementId = "output") {
+  console.error(message);
+  const element = document.getElementById(elementId);
+  if (element) {
+    element.innerHTML = `<p class="error">${escapeHTML(message)}</p>`;
+  }
+};
+
+// Utility to escape HTML (for security)
+const escapeHTML = (str) =>
+  str.replace(
+    /[&<>"']/g,
+    (c) =>
+      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[
+        c
+      ])
+  );
+
 Dashboard.fetchQuestions = async function () {
   try {
     document.getElementById("output").innerHTML =
       "<p class='loading'>Loading questions...</p>";
     const filePathFilter = document.getElementById("filePathDropdown").value;
-    let url = "/api/questions";
-    if (filePathFilter && filePathFilter !== "all")
-      url += `?file_path=${encodeURIComponent(filePathFilter)}`;
+    const url =
+      filePathFilter && filePathFilter !== "all"
+        ? `/api/questions?file_path=${encodeURIComponent(filePathFilter)}`
+        : "/api/questions";
     const response = await fetch(url);
     const data = await response.json();
-    Dashboard.questionsData = data.questions || data;
+    if (data.error) throw new Error(data.error);
+    Dashboard.questionsData = data.questions;
     Dashboard.availableFilePaths = data.available_files || [];
     Dashboard.uniqueCategories = [
       ...new Set(Dashboard.questionsData.map((q) => q.category)),
     ];
-    Dashboard.categoryColorMap = {};
-    Dashboard.uniqueCategories.forEach(
-      (cat, index) =>
-        (Dashboard.categoryColorMap[cat] =
-          Dashboard.categoryColors[index % Dashboard.categoryColors.length])
+    Dashboard.categoryColorMap = Object.fromEntries(
+      Dashboard.uniqueCategories.map((cat, i) => [
+        cat,
+        Dashboard.categoryColors[i % Dashboard.categoryColors.length],
+      ])
     );
     Dashboard.populateFilters();
     Dashboard.populateQuestions();
   } catch (err) {
-    console.error("Error fetching questions:", err);
-    document.getElementById(
-      "output"
-    ).innerHTML = `<p>Error loading questions: ${err.message}</p>`;
+    Dashboard.showError(`Error loading questions: ${err.message}`);
   }
 };
 
@@ -47,22 +65,24 @@ Dashboard.populateQuestions = function () {
     const matchesStatus = statusFilter === "all" || q.status === statusFilter;
     const matchesCategory =
       categoryFilter === "all" || q.category === categoryFilter;
+
+    // Enhanced search logic
     const searchQueryNum = parseInt(searchQuery);
     const matchesSearch =
       searchQuery === "" ||
       q.enhanced_text.toLowerCase().includes(searchQuery) ||
+      (q.original_question_text &&
+        q.original_question_text.toLowerCase().includes(searchQuery)) ||
+      (q.duplicate_question_texts &&
+        q.duplicate_question_texts
+          .split("||")
+          .some((text) => text.toLowerCase().includes(searchQuery))) ||
       (searchQueryNum && q.id === searchQueryNum);
+
     const matchesImageRequirement =
       requiresImageFilter === "all" ||
-      (requiresImageFilter === "yes" &&
-        (q.requires_image === true ||
-          q.requires_image === 1 ||
-          q.requires_image === "1")) ||
-      (requiresImageFilter === "no" &&
-        (q.requires_image === false ||
-          q.requires_image === 0 ||
-          q.requires_image === "0" ||
-          !q.requires_image));
+      (requiresImageFilter === "yes" && q.requires_image) ||
+      (requiresImageFilter === "no" && !q.requires_image);
     return (
       matchesStatus &&
       matchesCategory &&
@@ -76,44 +96,47 @@ Dashboard.populateQuestions = function () {
       "<option value='none'>No questions match filters</option>";
     document.getElementById("output").innerHTML =
       "<p>No questions match the selected filters.</p>";
-  } else {
-    filtered.forEach((q) => {
-      const option = document.createElement("option");
-      option.value = q.id;
-      let matchStatus =
-        q.models_count && q.models_count > 0
-          ? q.matching_models / q.models_count === 1
-            ? "✅ "
-            : q.matching_models / q.models_count >= 0.5
-            ? "🟡 "
-            : "❌ "
-          : "⚪ ";
-      let positionDisplay =
-        filePathFilter && filePathFilter !== "all" && "array_order" in q
-          ? `${q.array_order}${q.source_type === "duplicate" ? " (rep)" : ""}: `
-          : `#${q.id}: `;
-      let fileInfo =
-        q.representative_file_path &&
-        (!filePathFilter || filePathFilter === "all")
-          ? ` [${q.representative_file_path.split("/").pop()}]`
-          : "";
-      const maxTextLength = 100;
-      const truncatedText =
-        q.enhanced_text.length > maxTextLength
-          ? q.enhanced_text.substr(0, maxTextLength) + "..."
-          : q.enhanced_text;
-      option.textContent = `${matchStatus}${positionDisplay}${truncatedText}${fileInfo}`;
-      if (q.status === "verified") option.className = "verified-option";
-      else if (q.status === "likely_correct")
-        option.className = "likely-option";
-      else if (q.status === "needs_review") option.className = "review-option";
-      else if (q.status === "incorrect") option.className = "incorrect-option";
-      else if (q.status === "corrected") option.className = "corrected-option";
-      questionDropdown.appendChild(option);
-    });
-    questionDropdown.selectedIndex = 0;
-    Dashboard.displayQuestionDetails(filtered[0].id);
+    return;
   }
+
+  filtered.forEach((q) => {
+    const option = document.createElement("option");
+    option.value = q.id;
+    const matchStatus =
+      q.models_count > 0
+        ? q.matching_models / q.models_count === 1
+          ? "✅ "
+          : q.matching_models / q.models_count >= 0.5
+          ? "🟡 "
+          : "❌ "
+        : "⚪ ";
+    const positionDisplay =
+      filePathFilter && filePathFilter !== "all" && q.array_order != null
+        ? `${q.array_order}: `
+        : `#${q.id}: `;
+    const fileInfo =
+      q.representative_file_path &&
+      (!filePathFilter || filePathFilter === "all")
+        ? ` [${q.representative_file_path.split("/").pop()}]`
+        : "";
+    const maxTextLength = 100;
+    const truncatedText =
+      q.enhanced_text.length > maxTextLength
+        ? q.enhanced_text.substr(0, maxTextLength) + "..."
+        : q.enhanced_text;
+    option.textContent = `${matchStatus}${positionDisplay}${truncatedText}${fileInfo}`;
+    option.className =
+      {
+        verified: "verified-option",
+        likely_correct: "likely-option",
+        needs_review: "review-option",
+        incorrect: "incorrect-option",
+        corrected: "corrected-option",
+      }[q.status] || "";
+    questionDropdown.appendChild(option);
+  });
+  questionDropdown.selectedIndex = 0;
+  Dashboard.displayQuestionDetails(filtered[0].id);
 };
 
 Dashboard.displayQuestionDetails = async function (
@@ -124,16 +147,31 @@ Dashboard.displayQuestionDetails = async function (
   try {
     document.getElementById("output").innerHTML =
       "<p class='loading'>Loading details...</p>";
-    const response = await fetch(`/api/question/${questionId}`);
+    const filePathFilter = document.getElementById("filePathDropdown").value;
+    const url =
+      filePathFilter && filePathFilter !== "all"
+        ? `/api/question/${questionId}?file_path=${encodeURIComponent(
+            filePathFilter
+          )}`
+        : `/api/question/${questionId}`;
+    const response = await fetch(url);
     const q = await response.json();
     if (q.error) {
-      document.getElementById("output").innerHTML = `<p>${q.error}</p>`;
+      Dashboard.showError(q.error);
       return;
     }
 
+    const statusColor = {
+      verified: "#2ecc71",
+      likely_correct: "#f1c40f",
+      incorrect: "#ff4757",
+      needs_review: "#fd7e14",
+      corrected: "#1abc9c",
+    };
+    const catColor = Dashboard.categoryColorMap[q.category] || "#344767";
+
     const container = document.getElementById("output");
     container.innerHTML = "";
-
     const headerDiv = document.createElement("div");
     headerDiv.classList.add("edit-header");
     headerDiv.style.display = "flex";
@@ -149,110 +187,134 @@ Dashboard.displayQuestionDetails = async function (
     container.appendChild(headerDiv);
 
     const detailsDiv = document.createElement("div");
-    const statusColor = {
-      verified: "#2ecc71",
-      likely_correct: "#f1c40f",
-      incorrect: "#ff4757",
-      needs_review: "#fd7e14",
-      corrected: "#1abc9c",
-    };
-    const catColor = Dashboard.categoryColorMap[q.category] || "#344767";
-
-    let html = `<p><strong>Status:</strong> <span style="color: ${
-      statusColor[q.status] || "#344767"
-    }">${
-      q.status
-    }</span> | <strong>Category:</strong> <span style="color: ${catColor}">${
+    let html = `
+      <p>
+        <strong>Status:</strong> <span style="color: ${
+          statusColor[q.status] || "#344767"
+        }">${q.status}</span> |
+        <strong>Category:</strong> <span style="color: ${catColor}">${
       q.category
-    }</span></p>`;
-    if (q.file_path)
-      html += ` | <strong>File:</strong> <span title="${
+    }</span>
+    `;
+    if (q.file_path) {
+      html += ` | <strong>File:</strong> <span title="${escapeHTML(
         q.file_path
-      }" class="file-path">${q.file_path.split("/").pop()}</span>`;
+      )}" class="file-path">${escapeHTML(q.file_path.split("/").pop())}</span>`;
+      if (q.page != null) html += ` | <strong>Page:</strong> ${q.page}`;
+      if (q.question_number != null)
+        html += ` | <strong>Original Question:</strong> ${q.question_number}`;
+    }
     html += `</p>`;
 
     if (q.status !== "corrected") {
       const buttonId = `markCorrectedBtn_${q.id}`;
       html += `<button id="${buttonId}" class="status-button" onclick="Dashboard.handleMarkAsCorrect(${q.id}, '${buttonId}')"><i class="fas fa-check-circle"></i> Mark as Corrected</button>`;
     }
-
-    html += `<p>${q.enhanced_text}</p>`;
-    html += `<div class="image-section"><div class="image-requirement ${
-      q.requires_image ? "required" : "not-required"
-    }"><i class="fas fa-${
-      q.requires_image ? "check-circle" : "info-circle"
-    }"></i> ${
-      q.requires_image
-        ? "This question requires an image"
-        : "This question does not require an image"
-    }</div>`;
+    html += `<p>${escapeHTML(q.enhanced_text)}</p>`;
+    html += `
+      <div class="image-section">
+        <div class="image-requirement ${
+          q.requires_image ? "required" : "not-required"
+        }">
+          <i class="fas fa-${
+            q.requires_image ? "check-circle" : "info-circle"
+          }"></i>
+          ${
+            q.requires_image
+              ? "This question requires an image"
+              : "This question does not require an image"
+          }
+        </div>
+    `;
     if (q.image_url) {
-      html += `<div class="image-container"><img src="${q.image_url}" alt="Question Image" class="question-image" onclick="Dashboard.openImageModal('${q.image_url}')"/><div class="image-buttons"><button onclick="Dashboard.openImageBrowser(${q.id}, document.getElementById('filePathDropdown').value !== 'all' ? document.getElementById('filePathDropdown').value : null)" class="image-button browse-button"><i class="fas fa-images"></i> Browse Images</button><button onclick="Dashboard.removeImage(${q.id})" class="image-button remove-button"><i class="fas fa-trash"></i> Remove Image</button></div></div>`;
+      html += `
+        <div class="image-container">
+          <img src="${q.image_url}" alt="Question Image" class="question-image" onclick="Dashboard.openImageModal('${q.image_url}')"/>
+          <div class="image-buttons">
+            <button onclick="Dashboard.openImageBrowser(${q.id}, document.getElementById('filePathDropdown').value !== 'all' ? document.getElementById('filePathDropdown').value : null)" class="image-button browse-button"><i class="fas fa-images"></i> Browse Images</button>
+            <button onclick="Dashboard.removeImage(${q.id})" class="image-button remove-button"><i class="fas fa-trash"></i> Remove Image</button>
+          </div>
+        </div>
+      `;
     } else {
-      html += `<div class="image-buttons"><button onclick="Dashboard.openImageBrowser(${q.id}, document.getElementById('filePathDropdown').value !== 'all' ? document.getElementById('filePathDropdown').value : null)" class="image-button browse-button"><i class="fas fa-images"></i> Select Image</button></div>`;
+      html += `
+        <div class="image-buttons">
+          <button onclick="Dashboard.openImageBrowser(${q.id}, document.getElementById('filePathDropdown').value !== 'all' ? document.getElementById('filePathDropdown').value : null)" class="image-button browse-button"><i class="fas fa-images"></i> Select Image</button>
+        </div>
+      `;
     }
     html += `</div>`;
 
+    const correctIndex = q.is_correct.findIndex((val) => val === "true");
     html += `<div class="section-title">Choices:</div><ul>`;
-    const correctIndex = q.is_correct.findIndex(
-      (val) => val === true || val === "true" || val === "1" || val === 1
-    );
-    q.choices.forEach(
-      (choice, i) =>
-        (html +=
-          i === correctIndex
-            ? `<li style="background: #e6ffe6; padding: 8px; border-radius: 5px;">✓ ${choice}</li>`
-            : `<li>${choice}</li>`)
-    );
+    q.choices.forEach((choice, i) => {
+      html +=
+        i === correctIndex
+          ? `<li style="background: #e6ffe6; padding: 8px; border-radius: 5px;">✓ ${escapeHTML(
+              choice
+            )}</li>`
+          : `<li>${escapeHTML(choice)}</li>`;
+    });
     html += `</ul>`;
 
-    html += `<div class="section-title" data-toggle="explanation">Explanation: <span>▼</span></div><div class="section-content" id="explanationSection">${
-      q.explanation || "No explanation provided."
-    }</div>`;
-    html += `<div class="section-title" data-toggle="predictions">Model Predictions: <span>▼</span></div><div class="section-content" id="predictionsSection"><div class="predictions-container">`;
+    html += `
+      <div class="section-title" data-toggle="explanation">Explanation: <span>▼</span></div>
+      <div class="section-content" id="explanationSection">${
+        q.explanation ? escapeHTML(q.explanation) : "No explanation provided."
+      }</div>
+      <div class="section-title" data-toggle="predictions">Model Predictions: <span>▼</span></div>
+      <div class="section-content" id="predictionsSection"><div class="predictions-container">
+    `;
     q.verification_results.forEach((pred) => {
       const expectedChoice =
         pred.expected_index >= 0 && pred.expected_index < q.choices.length
           ? q.choices[pred.expected_index]
           : "[unknown]";
-      if (pred.error)
+      if (pred.error) {
         html += `<p class="prediction">❌ ${
           pred.model_name
-        }: Error - ${pred.error.substring(0, 50)}...</p>`;
-      else if (pred.matches_expected)
+        }: Error - ${escapeHTML(pred.error.substring(0, 50))}...</p>`;
+      } else if (pred.matches_expected) {
         html += `<p class="prediction">✅ ${
           pred.model_name
-        }: <span style="color: #4c6fff; font-weight: bold">${
+        }: <span style="color: #4c6fff; font-weight: bold">${escapeHTML(
           q.choices[pred.selected_index]
-        }</span></p>`;
-      else if (
+        )}</span></p>`;
+      } else if (
         pred.selected_index >= 0 &&
         pred.selected_index < q.choices.length
-      )
+      ) {
         html += `<p class="prediction">❌ ${
           pred.model_name
-        }: <span style="color: #4c6fff; font-weight: bold">${
+        }: <span style="color: #4c6fff; font-weight: bold">${escapeHTML(
           q.choices[pred.selected_index]
-        }</span> (Expected: ${expectedChoice})</p>`;
-      else if (pred.selected_index === -1)
+        )}</span> (Expected: ${escapeHTML(expectedChoice)})</p>`;
+      } else if (pred.selected_index === -1) {
         html += `<p class="prediction">❓ ${pred.model_name}: None correct${
-          pred.suggested_answer ? ` - Suggested: ${pred.suggested_answer}` : ""
-        } (Expected: ${expectedChoice})</p>`;
-      else if (pred.selected_index === -2)
+          pred.suggested_answer
+            ? ` - Suggested: ${escapeHTML(pred.suggested_answer)}`
+            : ""
+        } (Expected: ${escapeHTML(expectedChoice)})</p>`;
+      } else if (pred.selected_index === -2) {
         html += `<p class="prediction">❓ ${
           pred.model_name
         }: No clear selection${
-          pred.suggested_answer ? `: "${pred.suggested_answer}"` : ""
-        } (Expected: ${expectedChoice})</p>`;
-      else
-        html += `<p class="prediction">❌ ${pred.model_name}: Invalid selection (Expected: ${expectedChoice})</p>`;
+          pred.suggested_answer
+            ? `: "${escapeHTML(pred.suggested_answer)}"`
+            : ""
+        } (Expected: ${escapeHTML(expectedChoice)})</p>`;
+      } else {
+        html += `<p class="prediction">❌ ${
+          pred.model_name
+        }: Invalid selection (Expected: ${escapeHTML(expectedChoice)})</p>`;
+      }
     });
     html += `</div></div>`;
 
     const agreementCount = q.verification_results.filter(
       (p) => p.matches_expected
     ).length;
-    let consensus =
+    const consensus =
       agreementCount === q.models_count
         ? "Full Consensus ✅"
         : agreementCount > q.models_count / 2
@@ -260,7 +322,7 @@ Dashboard.displayQuestionDetails = async function (
         : agreementCount === 0
         ? "No Agreement ❌"
         : `Minority Agreement ❌ (${agreementCount}/${q.models_count})`;
-    let consensusClass =
+    const consensusClass =
       agreementCount === q.models_count
         ? "full-consensus"
         : agreementCount > q.models_count / 2
@@ -292,9 +354,7 @@ Dashboard.displayQuestionDetails = async function (
 
     Dashboard.setupQuestionNavigation(questionId);
   } catch (err) {
-    console.error("Error fetching details:", err);
-    document.getElementById("output").innerHTML =
-      "<p>Error loading details.</p>";
+    Dashboard.showError(`Error loading details: ${err.message}`);
   }
 };
 

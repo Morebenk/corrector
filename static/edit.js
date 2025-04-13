@@ -1,7 +1,15 @@
+function updateChoiceRadioValues(choicesList) {
+  Array.from(choicesList.children).forEach((container, i) => {
+    const radio = container.querySelector('input[type="radio"]');
+    radio.value = i;
+    const choiceInput = container.querySelector('input[type="text"]');
+    choiceInput.name = `choice_${i}`;
+  });
+}
+
 Dashboard.renderEditForm = function (q) {
   const container = document.getElementById("output");
   container.innerHTML = "";
-
   const form = document.createElement("form");
   form.id = "editForm";
 
@@ -19,6 +27,9 @@ Dashboard.renderEditForm = function (q) {
   const btnDiv = document.createElement("div");
   btnDiv.classList.add("edit-actions");
 
+  const cleanupNavWarning = () =>
+    window.removeEventListener("beforeunload", beforeUnloadHandler);
+
   const cancelButton = document.createElement("button");
   cancelButton.type = "button";
   cancelButton.innerHTML =
@@ -30,6 +41,7 @@ Dashboard.renderEditForm = function (q) {
       !confirm("You have unsaved changes. Are you sure you want to cancel?")
     )
       return;
+    cleanupNavWarning();
     Dashboard.displayQuestionDetails(q.id);
   });
 
@@ -38,7 +50,10 @@ Dashboard.renderEditForm = function (q) {
   saveButton.innerHTML =
     '<i class="fas fa-save"></i> <span class="button-text">Save Changes</span>';
   saveButton.classList.add("form-button", "save");
-  saveButton.addEventListener("click", () => Dashboard.saveEdits(q.id));
+  saveButton.addEventListener("click", async () => {
+    const success = await Dashboard.saveEdits(q.id);
+    if (success) cleanupNavWarning();
+  });
 
   const saveAndMarkButton = document.createElement("button");
   saveAndMarkButton.type = "button";
@@ -50,6 +65,7 @@ Dashboard.renderEditForm = function (q) {
       await fetch(`/api/question/${q.id}/mark-corrected`, { method: "POST" });
       await Dashboard.fetchQuestions();
       Dashboard.loadFilters();
+      cleanupNavWarning();
     }
   });
 
@@ -65,9 +81,7 @@ Dashboard.renderEditForm = function (q) {
     category: q.category,
     explanation: q.explanation || "",
     requires_image: q.requires_image,
-    correct_index: q.is_correct.findIndex(
-      (val) => val === true || val === "true" || val === "1" || val === 1
-    ),
+    correct_index: q.is_correct.findIndex((val) => val === "true"),
     choices: [...q.choices],
   };
 
@@ -99,8 +113,8 @@ Dashboard.renderEditForm = function (q) {
         (choice, i) => choice === originalValues.choices[i]
       ) ||
       currentChoices.length !== originalValues.choices.length;
-    form.dataset.hasChanges = hasChanges ? "true" : "false";
-    stickyHeader.dataset.unsaved = hasChanges ? "true" : "false";
+    form.dataset.hasChanges = hasChanges;
+    stickyHeader.dataset.unsaved = hasChanges;
   };
 
   form.addEventListener("input", checkFormChanges);
@@ -113,8 +127,6 @@ Dashboard.renderEditForm = function (q) {
     }
   };
   window.addEventListener("beforeunload", beforeUnloadHandler);
-  const cleanupNavWarning = () =>
-    window.removeEventListener("beforeunload", beforeUnloadHandler);
 
   const textDiv = document.createElement("div");
   textDiv.classList.add("form-field");
@@ -149,9 +161,19 @@ Dashboard.renderEditForm = function (q) {
   const imageContentDiv = document.createElement("div");
   imageContentDiv.classList.add("image-content");
   if (q.image_url) {
-    imageContentDiv.innerHTML = `<div class="image-container"><img src="${q.image_url}" alt="Question Image" class="question-image" onclick="Dashboard.openImageModal('${q.image_url}')"/><button type="button" onclick="Dashboard.removeImage(${q.id})" class="image-remove-btn"><i class="fas fa-trash"></i> Remove Image</button></div>`;
+    imageContentDiv.innerHTML = `
+      <div class="image-container">
+        <img src="${q.image_url}" alt="Question Image" class="question-image" onclick="Dashboard.openImageModal('${q.image_url}')"/>
+        <button type="button" onclick="Dashboard.removeImage(${q.id})" class="image-remove-btn"><i class="fas fa-trash"></i> Remove Image</button>
+      </div>
+    `;
   } else {
-    imageContentDiv.innerHTML = `<div class="image-upload"><label for="imageFile" class="image-upload-label"><i class="fas fa-cloud-upload-alt"></i> Upload Image</label><input type="file" id="imageFile" accept="image/*" onchange="Dashboard.uploadImage(${q.id}, this)" style="display: none;"/></div>`;
+    imageContentDiv.innerHTML = `
+      <div class="image-upload">
+        <label for="imageFile" class="image-upload-label"><i class="fas fa-cloud-upload-alt"></i> Upload Image</label>
+        <input type="file" id="imageFile" accept="image/*" onchange="Dashboard.uploadImage(${q.id}, this)" style="display: none;"/>
+      </div>
+    `;
   }
   imageDiv.appendChild(imageContentDiv);
   form.appendChild(imageDiv);
@@ -160,9 +182,7 @@ Dashboard.renderEditForm = function (q) {
   choicesDiv.classList.add("form-field");
   choicesDiv.innerHTML = `<label><strong>Choices:</strong></label>`;
   const choicesList = document.createElement("div");
-  const correctIndex = q.is_correct.findIndex(
-    (val) => val === true || val === "true" || val === "1" || val === 1
-  );
+  const correctIndex = q.is_correct.findIndex((val) => val === "true");
   q.choices.forEach((choice, i) => {
     const choiceContainer = document.createElement("div");
     choiceContainer.classList.add("choice-container");
@@ -206,7 +226,6 @@ Dashboard.renderEditForm = function (q) {
     const choiceInput = document.createElement("input");
     choiceInput.type = "text";
     choiceInput.name = `choice_${i}`;
-    choiceInput.value = "";
     choiceContainer.appendChild(choiceInput);
     const removeButton = document.createElement("button");
     removeButton.type = "button";
@@ -215,6 +234,7 @@ Dashboard.renderEditForm = function (q) {
     removeButton.addEventListener("click", () => {
       choicesList.removeChild(choiceContainer);
       updateChoiceRadioValues(choicesList);
+      checkFormChanges();
     });
     choiceContainer.appendChild(removeButton);
     choicesList.appendChild(choiceContainer);
@@ -249,10 +269,10 @@ Dashboard.renderEditForm = function (q) {
     const correctChoice = form.querySelector(
       'input[name="correct_choice"]:checked'
     );
-    if (!correctChoice)
-      return alert(
-        "Please select a correct choice before generating an explanation."
-      );
+    if (!correctChoice) {
+      alert("Please select a correct choice before generating an explanation.");
+      return;
+    }
     const correctIndex = parseInt(correctChoice.value);
 
     try {
@@ -269,28 +289,18 @@ Dashboard.renderEditForm = function (q) {
       if (result.status === "success") {
         explanationArea.value = result.explanation;
         checkFormChanges();
-      } else alert("Failed to generate explanation: " + result.error);
+      } else {
+        alert("Failed to generate explanation: " + result.error);
+      }
     } catch (err) {
-      console.error("Error:", err);
-      alert("Error generating explanation.");
+      Dashboard.showError("Error generating explanation.");
     }
   });
   explanationDv.appendChild(generateButton);
   form.appendChild(explanationDv);
 
   container.appendChild(form);
-
-  return cleanupNavWarning;
 };
-
-function updateChoiceRadioValues(choicesList) {
-  Array.from(choicesList.children).forEach((container, i) => {
-    const radio = container.querySelector('input[type="radio"]');
-    radio.value = i;
-    const choiceInput = container.querySelector('input[type="text"]');
-    choiceInput.name = `choice_${i}`;
-  });
-}
 
 Dashboard.saveEdits = async function (questionId, skipSuccessMessage = false) {
   const form = document.getElementById("editForm");
@@ -300,18 +310,26 @@ Dashboard.saveEdits = async function (questionId, skipSuccessMessage = false) {
   const explanation = formData.get("explanation");
 
   const choicesList = form.querySelectorAll('input[name^="choice_"]');
-  if (choicesList.length === 0) return alert("Please add at least one choice.");
+  if (choicesList.length === 0) {
+    alert("Please add at least one choice.");
+    return false;
+  }
   const correctChoice = form.querySelector(
     'input[name="correct_choice"]:checked'
   );
-  if (!correctChoice) return alert("Please select a correct choice.");
+  if (!correctChoice) {
+    alert("Please select a correct choice.");
+    return false;
+  }
   const correctIndex = parseInt(correctChoice.value);
   const choices = Array.from(choicesList).map((input, i) => ({
     text: input.value.trim(),
-    is_correct: i === correctIndex ? 1 : 0,
+    is_correct: i === correctIndex,
   }));
-  if (choices.some((choice) => !choice.text))
-    return alert("All choices must have text.");
+  if (choices.some((choice) => !choice.text)) {
+    alert("All choices must have text.");
+    return false;
+  }
 
   const data = {
     enhanced_text: enhancedText,
@@ -334,9 +352,12 @@ Dashboard.saveEdits = async function (questionId, skipSuccessMessage = false) {
       await Dashboard.fetchQuestions();
       if (!skipSuccessMessage) Dashboard.displayQuestionDetails(questionId);
       return true;
-    } else alert("Update failed: " + (result.error || "Unknown error"));
+    } else {
+      alert("Update failed: " + (result.error || "Unknown error"));
+      return false;
+    }
   } catch (err) {
-    console.error("Error updating question:", err);
-    alert("Error updating question.");
+    Dashboard.showError("Error updating question.");
+    return false;
   }
 };
