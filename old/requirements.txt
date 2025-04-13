@@ -1,0 +1,9 @@
+Flask
+pandas
+sqlalchemy
+psycopg2-binary
+google-generativeai
+python-dotenv
+gunicorn
+google-genai
+boto3

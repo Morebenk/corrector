@@ -1,0 +1,1706 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+    />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <title>Consensus Dashboard</title>
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+
+    <!-- Font Awesome for icons -->
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css"
+      crossorigin="anonymous"
+      referrerpolicy="no-referrer"
+    />
+
+    <!-- Base styles -->
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <!-- Image Preview Modal -->
+  <div id="imagePreviewModal" class="image-preview-modal">
+    <div class="preview-container">
+      <div class="preview-header">
+        <h3>Image Preview</h3>
+        <button class="close-preview">&times;</button>
+      </div>
+      <img id="previewImage" src="" alt="Image Preview" />
+      <div class="preview-actions">
+        <button class="select-preview-image">Select This Image</button>
+        <button class="cancel-preview">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <body>
+    <!-- Image Modal -->
+    <div id="imageModal" class="image-modal">
+      <img class="modal-content" id="modalImage" />
+    </div>
+
+    <!-- Image Browser Modal -->
+    <div id="imageBrowserModal" class="image-browser-modal">
+      <div class="image-browser-content">
+        <div class="image-browser-header">
+          <h2>Select Image</h2>
+          <button class="close-modal">&times;</button>
+        </div>
+        <div class="image-browser-body">
+          <div class="file-selector">
+            <select id="imageFileSelect">
+              <option value="">Select a file</option>
+            </select>
+          </div>
+          <div class="page-selector">
+            <button class="page-nav prev-page" disabled>
+              <i class="fas fa-chevron-left"></i>
+            </button>
+            <span class="page-info"
+              >Page <span id="currentPage">1</span> of
+              <span id="totalPages">1</span></span
+            >
+            <button class="page-nav next-page" disabled>
+              <i class="fas fa-chevron-right"></i>
+            </button>
+          </div>
+          <div class="images-grid"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="container">
+      <h1>Consensus Dashboard</h1>
+      <div class="search-section">
+        <div class="search-bar">
+          <i class="fas fa-search search-icon"></i>
+          <input
+            type="text"
+            id="searchInput"
+            placeholder="Search by text or question ID..."
+          />
+        </div>
+      </div>
+
+      <div class="filters-section">
+        <div class="filters-row">
+          <div class="filter-item">
+            <label>
+              <i class="fas fa-file-alt"></i>
+              <select id="filePathDropdown">
+                <option value="all">All Files</option>
+              </select>
+            </label>
+          </div>
+          <div class="filter-item">
+            <label>
+              <i class="fas fa-flag"></i>
+              <select id="statusDropdown">
+                <option value="all">All Status</option>
+              </select>
+            </label>
+          </div>
+          <div class="filter-item">
+            <label>
+              <i class="fas fa-folder"></i>
+              <select id="categoryDropdown">
+                <option value="all">All Categories</option>
+              </select>
+            </label>
+          </div>
+          <div class="filter-item">
+            <label>
+              <i class="fas fa-image"></i>
+              <select id="requiresImageDropdown">
+                <option value="all">All Images</option>
+                <option value="yes">Images Required</option>
+                <option value="no">No Image Required</option>
+              </select>
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <div class="question-selection">
+        <select id="questionDropdown" class="question-dropdown"></select>
+      </div>
+      <div class="question-details" id="output">
+        <p class="loading">Loading...</p>
+      </div>
+    </div>
+
+    <script>
+      // Filter persistence functions
+      function saveFilters() {
+        const filters = {
+          status: document.getElementById("statusDropdown").value,
+          category: document.getElementById("categoryDropdown").value,
+          search: document.getElementById("searchInput").value,
+          requiresImage: document.getElementById("requiresImageDropdown").value,
+          filePath: document.getElementById("filePathDropdown").value,
+        };
+        localStorage.setItem("dashboardFilters", JSON.stringify(filters));
+      }
+
+      function loadFilters() {
+        const savedFilters = localStorage.getItem("dashboardFilters");
+        if (savedFilters) {
+          const filters = JSON.parse(savedFilters);
+          // Set filters after a small delay to ensure dropdowns are populated
+          setTimeout(() => {
+            if (filters.status)
+              document.getElementById("statusDropdown").value = filters.status;
+            if (filters.category)
+              document.getElementById("categoryDropdown").value =
+                filters.category;
+            if (filters.search)
+              document.getElementById("searchInput").value = filters.search;
+            if (filters.requiresImage)
+              document.getElementById("requiresImageDropdown").value =
+                filters.requiresImage;
+            if (filters.filePath)
+              document.getElementById("filePathDropdown").value =
+                filters.filePath;
+            populateQuestions(); // Apply filters
+          }, 100);
+        }
+      }
+
+      // Simple drowssap protection with persistence
+      const drowssaPtcerroc = "Nony8899";
+      const storedAuth = localStorage.getItem("dashboardAuth");
+
+      if (!storedAuth || storedAuth !== drowssaPtcerroc) {
+        let stpmetta = 0;
+        while (stpmetta < 3) {
+          const drowssap = prompt("Please enter code to access the dashboard:");
+          if (drowssap === drowssaPtcerroc) {
+            localStorage.setItem("dashboardAuth", drowssaPtcerroc);
+            break;
+          }
+          stpmetta++;
+          if (stpmetta < 3) {
+            alert("Incorrect. Please try again.");
+          } else {
+            document.body.innerHTML = "<h1>Access Denied</h1>";
+            throw new Error("Access denied");
+          }
+        }
+      }
+
+      // Image modal functions
+      function openImageModal(imageUrl) {
+        const modal = document.getElementById("imageModal");
+        const modalImg = document.getElementById("modalImage");
+        modalImg.src = imageUrl;
+        modal.classList.add("active");
+        document.body.style.overflow = "hidden";
+      }
+
+      // Close modal when clicking outside the image
+      document
+        .getElementById("imageModal")
+        .addEventListener("click", function (e) {
+          if (e.target === this) {
+            this.classList.remove("active");
+            document.body.style.overflow = "";
+          }
+        });
+
+      // Close modal with Escape key
+      document.addEventListener("keydown", function (e) {
+        if (e.key === "Escape") {
+          const modal = document.getElementById("imageModal");
+          modal.classList.remove("active");
+          document.body.style.overflow = "";
+        }
+      });
+
+      let questionsData = [];
+      let uniqueCategories = [];
+      let uniqueFilePaths = [];
+      const categoryColors = [
+        "#4c6fff",
+        "#6f42c1",
+        "#20c997",
+        "#8c510a",
+        "#e83e8c",
+        "#6c757d",
+        "#17a2b8",
+        "#6610f2",
+      ];
+
+      let categoryColorMap = {};
+
+      // Add to your existing script section
+      // Add global variable to track available file paths
+      let availableFilePaths = [];
+
+      // Modified fetchQuestions function
+      async function fetchQuestions() {
+        try {
+          document.getElementById("output").innerHTML =
+            "<p class='loading'>Loading questions...</p>";
+
+          // Get file path filter if it exists
+          const filePathDropdown = document.getElementById("filePathDropdown");
+          const filePathFilter = filePathDropdown
+            ? filePathDropdown.value
+            : "all";
+
+          let url = "/api/questions";
+          if (filePathFilter && filePathFilter !== "all") {
+            url += `?file_path=${encodeURIComponent(filePathFilter)}`;
+          }
+
+          const response = await fetch(url);
+          const data = await response.json();
+
+          // Handle both formats (backward compatibility)
+          questionsData = data.questions || data;
+          availableFilePaths = data.available_files || [];
+
+          uniqueCategories = [...new Set(questionsData.map((q) => q.category))];
+          categoryColorMap = {};
+          uniqueCategories.forEach((cat, index) => {
+            categoryColorMap[cat] =
+              categoryColors[index % categoryColors.length];
+          });
+
+          populateFilters();
+          populateQuestions();
+        } catch (err) {
+          console.error("Error fetching questions:", err);
+          document.getElementById(
+            "output"
+          ).innerHTML = `<p>Error loading questions: ${err.message}</p>`;
+        }
+      }
+
+      function populateFilters() {
+        // Status dropdown population (unchanged)
+        const statusSet = new Set(questionsData.map((q) => q.status));
+        const statusDropdown = document.getElementById("statusDropdown");
+        while (statusDropdown.options.length > 1) {
+          statusDropdown.remove(1);
+        }
+        Array.from(statusSet)
+          .sort()
+          .forEach((status) => {
+            const option = document.createElement("option");
+            option.value = status;
+            option.textContent = status;
+            statusDropdown.appendChild(option);
+          });
+
+        // Category dropdown population (unchanged)
+        const categoryDropdown = document.getElementById("categoryDropdown");
+        while (categoryDropdown.options.length > 1) {
+          categoryDropdown.remove(1);
+        }
+        Array.from(uniqueCategories)
+          .sort()
+          .forEach((category) => {
+            const option = document.createElement("option");
+            option.value = category;
+            option.textContent = category;
+            categoryDropdown.appendChild(option);
+          });
+
+        // Get or create file path dropdown
+        let filePathDropdown = document.getElementById("filePathDropdown");
+        if (!filePathDropdown) {
+          // Create the file path dropdown if it doesn't exist
+          const filtersRow = document.querySelector(".filters-row");
+          const filterItem = document.createElement("div");
+          filterItem.className = "filter-item";
+
+          filterItem.innerHTML = `
+      <label>
+        <i class="fas fa-file-alt"></i>
+        <select id="filePathDropdown">
+          <option value="all">All Files</option>
+        </select>
+      </label>
+    `;
+
+          filtersRow.appendChild(filterItem);
+          filePathDropdown = document.getElementById("filePathDropdown");
+
+          // Add event listener for the new dropdown
+          filePathDropdown.addEventListener("change", function () {
+            fetchQuestions().then(() => loadFilters());
+          });
+        }
+
+        // Save current selection before clearing
+        const currentSelection = filePathDropdown.value;
+
+        // Clear existing options except "All"
+        while (filePathDropdown.options.length > 1) {
+          filePathDropdown.remove(1);
+        }
+
+        // Add file paths to dropdown
+        availableFilePaths.sort().forEach((filePath) => {
+          const option = document.createElement("option");
+          option.value = filePath;
+
+          // Display just the filename, not the full path
+          const fileName = filePath.split("/").pop();
+          option.textContent = fileName;
+          option.title = filePath; // Show full path on hover
+
+          filePathDropdown.appendChild(option);
+        });
+
+        // Restore previous selection if it exists in new options
+        if (currentSelection && currentSelection !== "all") {
+          for (let i = 0; i < filePathDropdown.options.length; i++) {
+            if (filePathDropdown.options[i].value === currentSelection) {
+              filePathDropdown.selectedIndex = i;
+              break;
+            }
+          }
+        }
+      }
+
+      function populateQuestions() {
+        const statusFilter = document.getElementById("statusDropdown").value;
+        const categoryFilter =
+          document.getElementById("categoryDropdown").value;
+        const searchQuery = document
+          .getElementById("searchInput")
+          .value.toLowerCase();
+        const requiresImageFilter = document.getElementById(
+          "requiresImageDropdown"
+        ).value;
+        const questionDropdown = document.getElementById("questionDropdown");
+        const filePathFilter =
+          document.getElementById("filePathDropdown").value;
+
+        questionDropdown.innerHTML = "";
+
+        const filtered = questionsData.filter((q) => {
+          const matchesStatus =
+            statusFilter === "all" || q.status === statusFilter;
+          const matchesCategory =
+            categoryFilter === "all" || q.category === categoryFilter;
+          const searchQueryNum = parseInt(searchQuery);
+          const matchesSearch =
+            searchQuery === "" ||
+            q.enhanced_text.toLowerCase().includes(searchQuery) ||
+            (searchQueryNum && q.id === searchQueryNum);
+          const matchesImageRequirement =
+            requiresImageFilter === "all" ||
+            (requiresImageFilter === "yes" &&
+              (q.requires_image === true ||
+                q.requires_image === 1 ||
+                q.requires_image === "1")) ||
+            (requiresImageFilter === "no" &&
+              (q.requires_image === false ||
+                q.requires_image === 0 ||
+                q.requires_image === "0" ||
+                !q.requires_image));
+
+          return (
+            matchesStatus &&
+            matchesCategory &&
+            matchesSearch &&
+            matchesImageRequirement
+          );
+        });
+
+        if (filtered.length === 0) {
+          questionDropdown.innerHTML =
+            "<option value='none'>No questions match filters</option>";
+          document.getElementById("output").innerHTML =
+            "<p>No questions match the selected filters.</p>";
+        } else {
+          filtered.forEach((q) => {
+            const option = document.createElement("option");
+            option.value = q.id;
+
+            // Determine match status indicator
+            let matchStatus = "";
+            // Check if verification data exists (handles both null and undefined)
+            if (q.models_count && q.models_count > 0) {
+              const matchRatio = q.matching_models / q.models_count;
+              if (matchRatio === 1) matchStatus = "✅ ";
+              else if (matchRatio >= 0.5) matchStatus = "🟡 ";
+              else matchStatus = "❌ ";
+            } else {
+              matchStatus = "⚪ "; // Use a neutral indicator for questions without verification
+            }
+
+            // Format the question position/name based on file context
+            let positionDisplay = "";
+            if (
+              filePathFilter &&
+              filePathFilter !== "all" &&
+              "array_order" in q
+            ) {
+              // When filtering by file, show the position in file
+              const positionNum = q.array_order;
+
+              // Add rep indicator if it's a representative of a duplicate
+              const repIndicator =
+                q.source_type === "duplicate" ? " (rep)" : "";
+
+              positionDisplay = `${positionNum}${repIndicator}: `;
+            } else {
+              // When not filtering by file, show the ID
+              positionDisplay = `#${q.id}: `;
+            }
+
+            // Add file path info if available
+            let fileInfo = "";
+            if (
+              q.representative_file_path &&
+              (!filePathFilter || filePathFilter === "all")
+            ) {
+              const fileName = q.representative_file_path.split("/").pop();
+              fileInfo = ` [${fileName}]`;
+            }
+
+            // Create label with position, text, and file info
+            const maxTextLength = 100;
+            const truncatedText =
+              q.enhanced_text.length > maxTextLength
+                ? q.enhanced_text.substr(0, maxTextLength) + "..."
+                : q.enhanced_text;
+
+            option.textContent = `${matchStatus}${positionDisplay}${truncatedText}${fileInfo}`;
+
+            // Set custom styling based on status
+            if (q.status === "verified") option.className = "verified-option";
+            else if (q.status === "likely_correct")
+              option.className = "likely-option";
+            else if (q.status === "needs_review")
+              option.className = "review-option";
+            else if (q.status === "incorrect")
+              option.className = "incorrect-option";
+            else if (q.status === "corrected")
+              option.className = "corrected-option";
+
+            questionDropdown.appendChild(option);
+          });
+
+          // Display first question if any
+          questionDropdown.selectedIndex = 0;
+          displayQuestionDetails(filtered[0].id);
+        }
+      }
+
+      async function handleMarkAsCorrect(questionId, buttonId) {
+        const btn = document.getElementById(buttonId);
+        if (!btn) return;
+
+        try {
+          btn.disabled = true;
+          btn.innerHTML =
+            '<i class="fas fa-spinner fa-spin"></i> Marking as corrected...';
+          await markAsCorrected(questionId);
+        } catch (err) {
+          console.error("Error:", err);
+          alert("Error marking question as corrected");
+        } finally {
+          if (document.getElementById(buttonId)) {
+            btn.disabled = false;
+            btn.innerHTML =
+              '<i class="fas fa-check-circle"></i> Mark as Corrected';
+          }
+        }
+      }
+
+      async function markAsCorrected(questionId) {
+        const response = await fetch(
+          `/api/question/${questionId}/mark-corrected`,
+          {
+            method: "POST",
+          }
+        );
+        const result = await response.json();
+        if (result.status === "success") {
+          await fetchQuestions().then(() => loadFilters());
+          displayQuestionDetails(questionId);
+        } else {
+          throw new Error(result.error || "Unknown error");
+        }
+      }
+
+      async function displayQuestionDetails(
+        questionId,
+        preserveScroll = false
+      ) {
+        // Store current scroll position if needed
+        const scrollPosition = preserveScroll ? window.scrollY : 0;
+        try {
+          document.getElementById("output").innerHTML =
+            "<p class='loading'>Loading details...</p>";
+          const response = await fetch(`/api/question/${questionId}`);
+          const q = await response.json();
+          if (q.error) {
+            document.getElementById("output").innerHTML = `<p>${q.error}</p>`;
+            return;
+          }
+
+          const container = document.getElementById("output");
+          container.innerHTML = "";
+
+          const headerDiv = document.createElement("div");
+          headerDiv.classList.add("edit-header");
+          headerDiv.style.display = "flex";
+          headerDiv.style.justifyContent = "space-between";
+          headerDiv.style.alignItems = "center";
+          const title = document.createElement("h2");
+          title.textContent = `Question ${q.id}`;
+          headerDiv.appendChild(title);
+          const editButton = document.createElement("button");
+          editButton.textContent = "Edit";
+          editButton.addEventListener("click", () => renderEditForm(q));
+          headerDiv.appendChild(editButton);
+          container.appendChild(headerDiv);
+
+          const detailsDiv = document.createElement("div");
+          const statusColor = {
+            verified: "#2ecc71",
+            likely_correct: "#f1c40f",
+            incorrect: "#ff4757",
+            needs_review: "#fd7e14",
+            corrected: "#1abc9c",
+          };
+          const catColor = categoryColorMap[q.category] || "#344767";
+
+          let html = `<p><strong>Status:</strong> <span style="color: ${
+            statusColor[q.status] || "#344767"
+          }">${
+            q.status
+          }</span> | <strong>Category:</strong> <span style="color: ${catColor}">${
+            q.category
+          }</span></p>`;
+
+          // Add file path if available
+          if (q.file_path) {
+            const fileName = q.file_path.split("/").pop();
+            html += ` | <strong>File:</strong> <span title="${q.file_path}" class="file-path">${fileName}</span>`;
+          }
+
+          html += `</p>`;
+
+          // Add Mark as Corrected button
+          if (q.status !== "corrected") {
+            // Create a unique ID for each button based on question ID
+            const buttonId = `markCorrectedBtn_${q.id}`;
+            html += `<button id="${buttonId}" class="status-button" onclick="handleMarkAsCorrect(${q.id}, '${buttonId}')">
+              <i class="fas fa-check-circle"></i> Mark as Corrected
+            </button>`;
+          }
+
+          html += `<p>${q.enhanced_text}</p>`;
+
+          // Image section
+          html += `<div class="image-section">
+  <div class="image-requirement ${
+    q.requires_image ? "required" : "not-required"
+  }">
+    <i class="fas fa-${q.requires_image ? "check-circle" : "info-circle"}"></i>
+    ${
+      q.requires_image
+        ? "This question requires an image"
+        : "This question does not require an image"
+    }
+  </div>`;
+
+          if (q.image_url) {
+            html += `<div class="image-container">
+      <img src="${q.image_url}" alt="Question Image" class="question-image" onclick="openImageModal('${q.image_url}')"/>
+      <div class="image-buttons">
+        <button onclick="openImageBrowser(${q.id})" class="image-button browse-button">
+          <i class="fas fa-images"></i> Browse Images
+        </button>
+        <button onclick="removeImage(${q.id})" class="image-button remove-button">
+          <i class="fas fa-trash"></i> Remove Image
+        </button>
+      </div>
+    </div>`;
+          } else {
+            html += `<div class="image-buttons">
+      <button onclick="openImageBrowser(${q.id})" class="image-button browse-button">
+        <i class="fas fa-images"></i> Select Image
+      </button>
+    </div>`;
+          }
+
+          html += `</div>`;
+
+          //choices section
+          html += `<div class="section-title">Choices:</div>`;
+          html += `<ul>`;
+          const correctIndex = q.is_correct.findIndex(
+            (val) => val === true || val === "true" || val === "1" || val === 1
+          );
+          q.choices.forEach((choice, i) => {
+            html +=
+              i === correctIndex
+                ? `<li style="background: #e6ffe6; padding: 8px; border-radius: 5px;">✓ ${choice}</li>`
+                : `<li>${choice}</li>`;
+          });
+          html += `</ul>`;
+
+          html += `<div class="section-title" data-toggle="explanation">Explanation: <span>▼</span></div>`;
+          html += `<div class="section-content" id="explanationSection">${
+            q.explanation || "No explanation provided."
+          }</div>`;
+
+          html += `<div class="section-title" data-toggle="predictions">Model Predictions: <span>▼</span></div>`;
+          html += `<div class="section-content" id="predictionsSection"><div class="predictions-container">`;
+          q.verification_results.forEach((pred) => {
+            const expectedChoice =
+              pred.expected_index >= 0 && pred.expected_index < q.choices.length
+                ? q.choices[pred.expected_index]
+                : "[unknown]";
+            if (pred.error) {
+              html += `<p class="prediction">❌ ${
+                pred.model_name
+              }: Error - ${pred.error.substring(0, 50)}...</p>`;
+            } else if (pred.matches_expected) {
+              const selectedChoice = q.choices[pred.selected_index];
+              html += `<p class="prediction">✅ ${pred.model_name}: <span style="color: #4c6fff; font-weight: bold">${selectedChoice}</span></p>`;
+            } else if (
+              pred.selected_index >= 0 &&
+              pred.selected_index < q.choices.length
+            ) {
+              const selectedChoice = q.choices[pred.selected_index];
+              html += `<p class="prediction">❌ ${pred.model_name}: <span style="color: #4c6fff; font-weight: bold">${selectedChoice}</span> (Expected: ${expectedChoice})</p>`;
+            } else if (pred.selected_index === -1) {
+              const suggestion = pred.suggested_answer
+                ? ` - Suggested: ${pred.suggested_answer}`
+                : "";
+              html += `<p class="prediction">❓ ${pred.model_name}: None correct${suggestion} (Expected: ${expectedChoice})</p>`;
+            } else if (pred.selected_index === -2) {
+              const suggestion = pred.suggested_answer
+                ? `: "${pred.suggested_answer}"`
+                : "";
+              html += `<p class="prediction">❓ ${pred.model_name}: No clear selection${suggestion} (Expected: ${expectedChoice})</p>`;
+            } else {
+              html += `<p class="prediction">❌ ${pred.model_name}: Invalid selection (Expected: ${expectedChoice})</p>`;
+            }
+          });
+          html += `</div></div>`;
+
+          const agreementCount = q.verification_results.filter(
+            (p) => p.matches_expected
+          ).length;
+          let consensus =
+            agreementCount === q.models_count
+              ? "Full Consensus ✅"
+              : agreementCount > q.models_count / 2
+              ? `Majority Agreement ⚠️ (${agreementCount}/${q.models_count})`
+              : agreementCount === 0
+              ? "No Agreement ❌"
+              : `Minority Agreement ❌ (${agreementCount}/${q.models_count})`;
+          let consensusClass = "";
+          if (agreementCount === q.models_count)
+            consensusClass = "full-consensus";
+          else if (agreementCount > q.models_count / 2)
+            consensusClass = "majority-agreement";
+          else consensusClass = "no-agreement";
+          html += `<div class="section-title">Consensus:</div><p class="${consensusClass}">${consensus}</p>`;
+
+          detailsDiv.innerHTML = html;
+          container.appendChild(detailsDiv);
+
+          // Restore scroll position if needed
+          if (preserveScroll) {
+            window.scrollTo({
+              top: scrollPosition,
+              behavior: "instant",
+            });
+          }
+
+          document
+            .querySelectorAll(".section-title[data-toggle]")
+            .forEach((title) => {
+              title.addEventListener("click", () => {
+                const section = document.getElementById(
+                  `${title.dataset.toggle}Section`
+                );
+                section.classList.toggle("collapsed");
+                title.querySelector("span").textContent =
+                  section.classList.contains("collapsed") ? "▼" : "▲";
+              });
+            });
+
+          const navContainer = document.createElement("div");
+          navContainer.className = "question-nav";
+          navContainer.innerHTML = `
+  <button class="nav-prev" title="Previous Question (Left Arrow)" aria-label="Previous Question">
+    <i class="fas fa-chevron-left"></i>
+  </button>
+  <button class="nav-next" title="Next Question (Right Arrow)" aria-label="Next Question">
+    <i class="fas fa-chevron-right"></i>
+  </button>
+`;
+
+          // Remove any existing navigation
+          const existingNav = document.querySelector(".question-nav");
+          if (existingNav) {
+            existingNav.remove();
+          }
+
+          // Add to body for fixed positioning
+          document.body.appendChild(navContainer);
+
+          // Set up navigation handlers
+          setupQuestionNavigation(questionId);
+        } catch (err) {
+          console.error("Error fetching details:", err);
+          document.getElementById("output").innerHTML =
+            "<p>Error loading details.</p>";
+        }
+      }
+
+      function setupQuestionNavigation(currentQuestionId) {
+        const questionDropdown = document.getElementById("questionDropdown");
+        const currentIndex = Array.from(questionDropdown.options).findIndex(
+          (option) => option.value === currentQuestionId.toString()
+        );
+        const totalQuestions = questionDropdown.options.length;
+
+        // Remove existing navigation if present
+        const existingNav = document.querySelector(".question-nav");
+        if (existingNav) existingNav.remove();
+
+        // Create new navigation bar
+        const nav = document.createElement("div");
+        nav.className = "question-nav";
+
+        const controls = document.createElement("div");
+        controls.className = "nav-controls";
+
+        // Previous button
+        const prevButton = document.createElement("button");
+        prevButton.className = "nav-prev";
+        prevButton.innerHTML = '<i class="fas fa-chevron-left"></i>';
+        prevButton.title = "Previous Question";
+        prevButton.setAttribute("aria-label", "Previous Question");
+
+        // Progress section
+        const progress = document.createElement("div");
+        progress.className = "nav-progress";
+
+        const count = document.createElement("span");
+        count.className = "nav-count";
+        count.textContent = `${currentIndex + 1} / ${totalQuestions}`;
+
+        const progressBar = document.createElement("div");
+        progressBar.className = "nav-progress-bar";
+
+        const progressFill = document.createElement("div");
+        progressFill.className = "nav-progress-fill";
+        progressFill.style.width = `${
+          ((currentIndex + 1) / totalQuestions) * 100
+        }%`;
+
+        progressBar.appendChild(progressFill);
+        progress.appendChild(count);
+        progress.appendChild(progressBar);
+
+        // Next button
+        const nextButton = document.createElement("button");
+        nextButton.className = "nav-next";
+        nextButton.innerHTML = '<i class="fas fa-chevron-right"></i>';
+        nextButton.title = "Next Question";
+        nextButton.setAttribute("aria-label", "Next Question");
+
+        // Disable buttons if at first/last question
+        if (currentIndex <= 0) {
+          prevButton.classList.add("nav-disabled");
+        } else {
+          prevButton.addEventListener("click", () => {
+            questionDropdown.selectedIndex = currentIndex - 1;
+            displayQuestionDetails(questionDropdown.value, true);
+          });
+        }
+
+        if (currentIndex >= totalQuestions - 1 || currentIndex === -1) {
+          nextButton.classList.add("nav-disabled");
+        } else {
+          nextButton.addEventListener("click", () => {
+            questionDropdown.selectedIndex = currentIndex + 1;
+            displayQuestionDetails(questionDropdown.value, true);
+          });
+        }
+
+        // Add touch swipe support
+        let touchStartX = 0;
+        let touchEndX = 0;
+
+        document.addEventListener(
+          "touchstart",
+          (e) => {
+            touchStartX = e.changedTouches[0].screenX;
+          },
+          { passive: true }
+        );
+
+        document.addEventListener(
+          "touchend",
+          (e) => {
+            touchEndX = e.changedTouches[0].screenX;
+            handleSwipe();
+          },
+          { passive: true }
+        );
+
+        function handleSwipe() {
+          const minSwipeDistance = 50;
+          const swipeDistance = touchEndX - touchStartX;
+
+          if (Math.abs(swipeDistance) > minSwipeDistance) {
+            if (
+              swipeDistance > 0 &&
+              !prevButton.classList.contains("nav-disabled")
+            ) {
+              // Swipe right - go to previous
+              prevButton.click();
+            } else if (
+              swipeDistance < 0 &&
+              !nextButton.classList.contains("nav-disabled")
+            ) {
+              // Swipe left - go to next
+              nextButton.click();
+            }
+          }
+        }
+
+        // Assemble and add to document
+        controls.appendChild(prevButton);
+        controls.appendChild(progress);
+        controls.appendChild(nextButton);
+        nav.appendChild(controls);
+        document.body.appendChild(nav);
+      }
+
+      function renderEditForm(q) {
+        const container = document.getElementById("output");
+        container.innerHTML = "";
+
+        const form = document.createElement("form");
+        form.id = "editForm";
+
+        // Create sticky header
+        const stickyHeader = document.createElement("div");
+        stickyHeader.classList.add("edit-sticky-header");
+
+        const headerContent = document.createElement("div");
+        headerContent.classList.add("edit-header-content");
+
+        const title = document.createElement("h2");
+        title.textContent = `Editing Question ${q.id}`;
+        headerContent.appendChild(title);
+
+        const statusBadge = document.createElement("span");
+        statusBadge.classList.add("edit-status-badge", q.status);
+        statusBadge.textContent = q.status;
+        headerContent.appendChild(statusBadge);
+
+        const btnDiv = document.createElement("div");
+        btnDiv.classList.add("edit-actions");
+
+        const cancelButton = document.createElement("button");
+        cancelButton.type = "button";
+        cancelButton.innerHTML =
+          '<i class="fas fa-times"></i> <span class="button-text">Cancel</span>';
+        cancelButton.classList.add("form-button", "cancel");
+        cancelButton.addEventListener("click", () => {
+          if (form.dataset.hasChanges === "true") {
+            if (
+              confirm(
+                "You have unsaved changes. Are you sure you want to cancel?"
+              )
+            ) {
+              displayQuestionDetails(q.id);
+            }
+          } else {
+            displayQuestionDetails(q.id);
+          }
+        });
+
+        const saveButton = document.createElement("button");
+        saveButton.type = "button";
+        saveButton.innerHTML =
+          '<i class="fas fa-save"></i> <span class="button-text">Save Changes</span>';
+        saveButton.classList.add("form-button", "save");
+        saveButton.addEventListener("click", () => saveEdits(q.id));
+
+        const saveAndMarkButton = document.createElement("button");
+        saveAndMarkButton.type = "button";
+        saveAndMarkButton.innerHTML =
+          '<i class="fas fa-check-double"></i> <span class="button-text">Save & Mark Correct</span>';
+        saveAndMarkButton.classList.add("form-button", "save-mark");
+        saveAndMarkButton.addEventListener("click", async () => {
+          if (await saveEdits(q.id, true)) {
+            await markAsCorrected(q.id);
+          }
+        });
+
+        btnDiv.appendChild(saveButton);
+        btnDiv.appendChild(saveAndMarkButton);
+        btnDiv.appendChild(cancelButton);
+        headerContent.appendChild(btnDiv);
+
+        stickyHeader.appendChild(headerContent);
+        form.appendChild(stickyHeader);
+
+        // Add form change detection
+        // Store original form values
+        const originalValues = {
+          text: q.enhanced_text,
+          category: q.category,
+          explanation: q.explanation || "",
+          requires_image: q.requires_image,
+          correct_index: q.is_correct.findIndex(
+            (val) => val === true || val === "true" || val === "1" || val === 1
+          ),
+          choices: [...q.choices],
+        };
+
+        const checkFormChanges = () => {
+          const currentText = form.querySelector(
+            'textarea[name="enhanced_text"]'
+          ).value;
+          const currentCategory = form.querySelector(
+            'select[name="category"]'
+          ).value;
+          const currentExplanation = form.querySelector(
+            'textarea[name="explanation"]'
+          ).value;
+          const currentRequiresImage = form.querySelector(
+            'input[name="requires_image"]'
+          ).checked;
+          const currentChoices = Array.from(
+            form.querySelectorAll('input[name^="choice_"]')
+          ).map((input) => input.value);
+          const currentCorrectIndex = parseInt(
+            form.querySelector('input[name="correct_choice"]:checked')?.value ||
+              -1
+          );
+
+          const hasChanges =
+            currentText !== originalValues.text ||
+            currentCategory !== originalValues.category ||
+            currentExplanation !== originalValues.explanation ||
+            currentRequiresImage !== originalValues.requires_image ||
+            currentCorrectIndex !== originalValues.correct_index ||
+            !currentChoices.every(
+              (choice, i) => choice === originalValues.choices[i]
+            ) ||
+            currentChoices.length !== originalValues.choices.length;
+
+          form.dataset.hasChanges = hasChanges ? "true" : "false";
+          stickyHeader.dataset.unsaved = hasChanges ? "true" : "false";
+        };
+
+        // Handle form changes
+        form.addEventListener("input", checkFormChanges);
+        form.addEventListener("change", checkFormChanges);
+
+        // Add navigation warning
+        const beforeUnloadHandler = (e) => {
+          if (form.dataset.hasChanges === "true") {
+            e.preventDefault();
+            e.returnValue = "";
+          }
+        };
+
+        window.addEventListener("beforeunload", beforeUnloadHandler);
+
+        // Cleanup handler when form is removed
+        const cleanupNavWarning = () => {
+          window.removeEventListener("beforeunload", beforeUnloadHandler);
+        };
+
+        // Add cleanup to cancel and save actions
+        const originalDisplayDetails = displayQuestionDetails;
+        displayQuestionDetails = (id) => {
+          cleanupNavWarning();
+          originalDisplayDetails(id);
+        };
+
+        const textDiv = document.createElement("div");
+        textDiv.classList.add("form-field");
+        textDiv.innerHTML = `<label><strong>Question Text:</strong></label>`;
+        const textArea = document.createElement("textarea");
+        textArea.name = "enhanced_text";
+        textArea.style.height = "150px";
+        textArea.value = q.enhanced_text;
+        textDiv.appendChild(textArea);
+        form.appendChild(textDiv);
+
+        const categoryDiv = document.createElement("div");
+        categoryDiv.classList.add("form-field");
+        categoryDiv.innerHTML = `<label><strong>Category:</strong></label>`;
+        const categorySelect = document.createElement("select");
+        categorySelect.name = "category";
+        uniqueCategories.forEach((cat) => {
+          const option = document.createElement("option");
+          option.value = cat;
+          option.textContent = cat;
+          if (cat === q.category) option.selected = true;
+          categorySelect.appendChild(option);
+        });
+        categoryDiv.appendChild(categorySelect);
+        form.appendChild(categoryDiv);
+
+        // Add image section
+        const imageDiv = document.createElement("div");
+        imageDiv.classList.add("form-field", "image-section");
+
+        // Add requires_image checkbox at the top of image section
+        imageDiv.innerHTML = `
+          <label class="checkbox-label">
+            <input type="checkbox" name="requires_image" ${
+              q.requires_image ? "checked" : ""
+            }>
+            <span><strong>Requires Image</strong></span>
+          </label>
+        `;
+
+        // Add image upload/display section
+        const imageContentDiv = document.createElement("div");
+        imageContentDiv.classList.add("image-content");
+        if (q.image_url) {
+          imageContentDiv.innerHTML = `
+            <div class="image-container">
+              <img src="${q.image_url}" alt="Question Image" class="question-image" onclick="openImageModal('${q.image_url}')"/>
+              <button type="button" onclick="removeImage(${q.id})" class="image-remove-btn">
+                <i class="fas fa-trash"></i> Remove Image
+              </button>
+            </div>
+          `;
+        } else {
+          imageContentDiv.innerHTML = `
+            <div class="image-upload">
+              <label for="imageFile" class="image-upload-label">
+                <i class="fas fa-cloud-upload-alt"></i> Upload Image
+              </label>
+              <input type="file" id="imageFile" accept="image/*" onchange="uploadImage(${q.id}, this)" style="display: none;"/>
+            </div>
+          `;
+        }
+        imageDiv.appendChild(imageContentDiv);
+        form.appendChild(imageDiv);
+
+        const choicesDiv = document.createElement("div");
+        choicesDiv.classList.add("form-field");
+        choicesDiv.innerHTML = `<label><strong>Choices:</strong></label>`;
+        const choicesList = document.createElement("div");
+        const correctIndex = q.is_correct.findIndex(
+          (val) => val === true || val === "true" || val === "1" || val === 1
+        );
+        q.choices.forEach((choice, i) => {
+          const choiceContainer = document.createElement("div");
+          choiceContainer.classList.add("choice-container");
+          const radio = document.createElement("input");
+          radio.type = "radio";
+          radio.name = "correct_choice";
+          radio.value = i;
+          if (i === correctIndex) radio.checked = true;
+          radio.addEventListener("change", checkFormChanges);
+          choiceContainer.appendChild(radio);
+          const choiceInput = document.createElement("input");
+          choiceInput.type = "text";
+          choiceInput.name = `choice_${i}`;
+          choiceInput.value = choice;
+          choiceContainer.appendChild(choiceInput);
+          const removeButton = document.createElement("button");
+          removeButton.type = "button";
+          removeButton.innerHTML = '<i class="fas fa-trash"></i>';
+          removeButton.classList.add("remove-choice");
+          removeButton.addEventListener("click", () => {
+            choicesList.removeChild(choiceContainer);
+            updateChoiceRadioValues(choicesList);
+            checkFormChanges();
+          });
+          choiceContainer.appendChild(removeButton);
+          choicesList.appendChild(choiceContainer);
+        });
+
+        const addChoiceButton = document.createElement("button");
+        addChoiceButton.type = "button";
+        addChoiceButton.textContent = "Add Choice";
+        addChoiceButton.addEventListener("click", () => {
+          const i = choicesList.children.length;
+          const choiceContainer = document.createElement("div");
+          choiceContainer.classList.add("choice-container");
+          const radio = document.createElement("input");
+          radio.type = "radio";
+          radio.name = "correct_choice";
+          radio.value = i;
+          choiceContainer.appendChild(radio);
+          const choiceInput = document.createElement("input");
+          choiceInput.type = "text";
+          choiceInput.name = `choice_${i}`;
+          choiceInput.value = "";
+          choiceContainer.appendChild(choiceInput);
+          const removeButton = document.createElement("button");
+          removeButton.type = "button";
+          removeButton.innerHTML = '<i class="fas fa-trash"></i>';
+          removeButton.classList.add("remove-choice");
+          removeButton.addEventListener("click", () => {
+            choicesList.removeChild(choiceContainer);
+            updateChoiceRadioValues(choicesList);
+          });
+          choiceContainer.appendChild(removeButton);
+          choicesList.appendChild(choiceContainer);
+          radio.addEventListener("change", checkFormChanges);
+          choiceInput.addEventListener("input", checkFormChanges);
+          checkFormChanges();
+        });
+        choicesDiv.appendChild(choicesList);
+        choicesDiv.appendChild(addChoiceButton);
+        form.appendChild(choicesDiv);
+
+        const explanationDiv = document.createElement("div");
+        explanationDiv.classList.add("form-field");
+        explanationDiv.innerHTML = `<label><strong>Explanation:</strong></label>`;
+        const explanationArea = document.createElement("textarea");
+        explanationArea.name = "explanation";
+        explanationArea.style.height = "150px";
+        explanationArea.value = q.explanation || "";
+        explanationDiv.appendChild(explanationArea);
+
+        // Generate Explanation Button
+        const generateButton = document.createElement("button");
+        generateButton.type = "button";
+        generateButton.innerHTML =
+          '<i class="fas fa-magic"></i> Generate Explanation';
+        generateButton.classList.add("generate-explanation");
+        generateButton.addEventListener("click", async () => {
+          const questionText = form.querySelector(
+            'textarea[name="enhanced_text"]'
+          ).value;
+          const choiceInputs = form.querySelectorAll('input[name^="choice_"]');
+          const choices = Array.from(choiceInputs).map((input) =>
+            input.value.trim()
+          );
+          const correctChoice = form.querySelector(
+            'input[name="correct_choice"]:checked'
+          );
+          if (!correctChoice) {
+            alert(
+              "Please select a correct choice before generating an explanation."
+            );
+            return;
+          }
+          const correctIndex = parseInt(correctChoice.value);
+
+          try {
+            const response = await fetch("/api/generate_explanation", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                question_text: questionText,
+                choices: choices,
+                correct_index: correctIndex,
+              }),
+            });
+            const result = await response.json();
+            if (result.status === "success") {
+              explanationArea.value = result.explanation;
+              checkFormChanges();
+            } else {
+              alert("Failed to generate explanation: " + result.error);
+            }
+          } catch (err) {
+            console.error("Error:", err);
+            alert("Error generating explanation.");
+          }
+        });
+        explanationDiv.appendChild(generateButton);
+        form.appendChild(explanationDiv);
+
+        container.appendChild(form);
+      }
+
+      function updateChoiceRadioValues(choicesList) {
+        Array.from(choicesList.children).forEach((container, i) => {
+          const radio = container.querySelector('input[type="radio"]');
+          radio.value = i;
+          const choiceInput = container.querySelector('input[type="text"]');
+          choiceInput.name = `choice_${i}`;
+        });
+      }
+
+      async function saveEdits(questionId, skipSuccessMessage = false) {
+        const form = document.getElementById("editForm");
+        const formData = new FormData(form);
+        const enhancedText = formData.get("enhanced_text");
+        const category = formData.get("category");
+        const explanation = formData.get("explanation");
+
+        const choicesList = form.querySelectorAll('input[name^="choice_"]');
+        if (choicesList.length === 0) {
+          alert("Please add at least one choice.");
+          return;
+        }
+        const correctChoice = form.querySelector(
+          'input[name="correct_choice"]:checked'
+        );
+        if (!correctChoice) {
+          alert("Please select a correct choice.");
+          return;
+        }
+        const correctIndex = parseInt(correctChoice.value);
+        const choices = Array.from(choicesList).map((input, i) => ({
+          text: input.value.trim(),
+          is_correct: i === correctIndex ? 1 : 0,
+        }));
+
+        if (choices.some((choice) => !choice.text)) {
+          alert("All choices must have text.");
+          return;
+        }
+
+        const data = {
+          enhanced_text: enhancedText,
+          category,
+          explanation,
+          requires_image: form.querySelector('input[name="requires_image"]')
+            .checked,
+          choices,
+        };
+
+        try {
+          const response = await fetch(`/api/question/${questionId}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(data),
+          });
+          const result = await response.json();
+          if (result.status === "success") {
+            form.dataset.hasChanges = "false";
+            if (!skipSuccessMessage) {
+              alert("Update successful!");
+            }
+            await fetchQuestions().then(() => loadFilters());
+            if (!skipSuccessMessage) {
+              displayQuestionDetails(questionId);
+            }
+            return true;
+          } else {
+            alert("Update failed: " + (result.error || "Unknown error"));
+          }
+        } catch (err) {
+          console.error("Error updating question:", err);
+          alert("Error updating question.");
+        }
+      }
+
+      document
+        .getElementById("statusDropdown")
+        .addEventListener("change", () => {
+          populateQuestions();
+          saveFilters();
+        });
+      document
+        .getElementById("categoryDropdown")
+        .addEventListener("change", () => {
+          populateQuestions();
+          saveFilters();
+        });
+      document.getElementById("searchInput").addEventListener("input", () => {
+        populateQuestions();
+        saveFilters();
+      });
+      document
+        .getElementById("requiresImageDropdown")
+        .addEventListener("change", () => {
+          populateQuestions();
+          saveFilters();
+        });
+      document
+        .getElementById("questionDropdown")
+        .addEventListener("change", (e) =>
+          displayQuestionDetails(e.target.value, true)
+        );
+      document
+        .getElementById("filePathDropdown")
+        .addEventListener("change", () => {
+          fetchQuestions().then(() => loadFilters());
+          saveFilters();
+        });
+
+      async function uploadImage(questionId, input) {
+        if (!input.files || input.files.length === 0) return;
+
+        const file = input.files[0];
+        const formData = new FormData();
+        formData.append("image", file);
+
+        try {
+          const response = await fetch(`/api/question/${questionId}/image`, {
+            method: "POST",
+            body: formData,
+          });
+
+          const result = await response.json();
+          if (result.status === "success") {
+            // Refresh the question details to show the new image
+            displayQuestionDetails(questionId);
+          } else {
+            alert(
+              "Error uploading image: " + (result.error || "Unknown error")
+            );
+          }
+        } catch (err) {
+          console.error("Error:", err);
+          alert("Error uploading image");
+        }
+      }
+
+      async function removeImage(questionId) {
+        if (!confirm("Are you sure you want to remove this image?")) {
+          return;
+        }
+
+        try {
+          const response = await fetch(`/api/question/${questionId}/image`, {
+            method: "DELETE",
+          });
+
+          const result = await response.json();
+          if (result.status === "success") {
+            // Refresh the question details to show the image was removed
+            displayQuestionDetails(questionId);
+          } else {
+            alert("Error removing image: " + (result.error || "Unknown error"));
+          }
+        } catch (err) {
+          console.error("Error:", err);
+          alert("Error removing image");
+        }
+      }
+
+      // Add this before fetchQuestions().then(...) at the end of your script section
+
+      // Image Browser Functions
+      let currentImagePage = 1;
+      let totalImagePages = 1;
+      let lastViewedPage = 1; // Remember last viewed page
+      const imageBrowserModal = document.getElementById("imageBrowserModal");
+      const imagesGrid = document.querySelector(".images-grid");
+      const prevPageBtn = document.querySelector(".prev-page");
+      const nextPageBtn = document.querySelector(".next-page");
+      const closeModalBtn = document.querySelector(".close-modal");
+      const imageFileSelect = document.getElementById("imageFileSelect");
+      let currentQuestionForImage = null;
+      let currentImageFile = null;
+
+      // Function to load available image files for the dropdown
+      async function loadImageFiles() {
+        try {
+          const response = await fetch("/api/image_files");
+          const data = await response.json();
+
+          // Clear dropdown except first option
+          while (imageFileSelect.options.length > 1) {
+            imageFileSelect.remove(1);
+          }
+
+          // Add file options
+          data.files.forEach((file) => {
+            const option = document.createElement("option");
+            option.value = file;
+
+            // Display just the filename, not the full path
+            const fileName = file.split("/").pop();
+            option.textContent = fileName;
+            option.title = file; // Show full path on hover
+
+            imageFileSelect.appendChild(option);
+          });
+        } catch (err) {
+          console.error("Error loading image files:", err);
+        }
+      }
+
+      // Function to load images for a specific file and page
+      async function loadImages(file, page = 1) {
+        try {
+          const response = await fetch(
+            `/api/file_images?file_path=${encodeURIComponent(
+              file
+            )}&page=${page}`
+          );
+          const data = await response.json();
+
+          currentImagePage = data.current_page;
+          totalImagePages = data.total_pages;
+          document.getElementById("currentPage").textContent = currentImagePage;
+          document.getElementById("totalPages").textContent = totalImagePages;
+
+          // Update navigation buttons
+          prevPageBtn.disabled = currentImagePage <= 1;
+          nextPageBtn.disabled = currentImagePage >= totalImagePages;
+
+          // Display images
+          imagesGrid.innerHTML = "";
+          data.images.forEach((image) => {
+            const imgDiv = document.createElement("div");
+            imgDiv.className = "image-item";
+
+            // Create image element
+            const img = document.createElement("img");
+            img.src = image.url;
+            img.alt = `Image ${image.question_number || ""}`;
+            img.loading = "lazy";
+
+            // Add click handler to show preview
+            imgDiv.addEventListener("click", () => showImagePreview(image));
+
+            // Add info label
+            const infoDiv = document.createElement("div");
+            infoDiv.className = "image-info";
+            infoDiv.textContent = image.question_number
+              ? `Question ${image.question_number}`
+              : `Image ${image.id}`;
+
+            // Add hover zoom effect container
+            const zoomContainer = document.createElement("div");
+            zoomContainer.className = "zoom-container";
+            zoomContainer.appendChild(img);
+
+            // Add preview icon
+            const previewIcon = document.createElement("div");
+            previewIcon.className = "preview-icon";
+            previewIcon.innerHTML = '<i class="fas fa-search-plus"></i>';
+
+            imgDiv.appendChild(zoomContainer);
+            imgDiv.appendChild(previewIcon);
+            imgDiv.appendChild(infoDiv);
+            imagesGrid.appendChild(imgDiv);
+          });
+        } catch (err) {
+          console.error("Error loading images:", err);
+          imagesGrid.innerHTML =
+            '<div class="error-message">Error loading images</div>';
+        }
+      }
+
+      // Function to open the image browser
+      function openImageBrowser(questionId) {
+        currentQuestionForImage = questionId;
+        imageBrowserModal.classList.add("active");
+
+        // Load image files if not already loaded
+        if (imageFileSelect.options.length <= 1) {
+          loadImageFiles();
+        }
+
+        // Restore last selected file and page
+        const lastFile = localStorage.getItem("lastImageFile");
+        const lastPage = parseInt(localStorage.getItem("lastImagePage")) || 1;
+
+        if (lastFile) {
+          setTimeout(() => {
+            imageFileSelect.value = lastFile;
+            loadImages(lastFile, lastPage);
+          }, 100); // Small delay to ensure options are loaded
+        }
+
+        // Hide navigation footer
+        const nav = document.querySelector(".question-nav");
+        if (nav) {
+          nav.style.display = "none";
+        }
+
+        document.body.style.overflow = "hidden"; // Prevent scrolling
+      }
+
+      // Function to close the image browser
+      function closeImageBrowser() {
+        imageBrowserModal.classList.remove("active");
+        document.body.style.overflow = ""; // Restore scrolling
+
+        // Show navigation footer
+        const nav = document.querySelector(".question-nav");
+        if (nav) {
+          nav.style.display = "flex";
+        }
+      }
+
+      // Function to show image preview
+      function showImagePreview(image) {
+        const previewModal = document.getElementById("imagePreviewModal");
+        const previewImage = document.getElementById("previewImage");
+
+        previewImage.src = image.url;
+        previewModal.style.display = "flex";
+        document.body.style.overflow = "hidden";
+
+        // Setup preview actions
+        const selectBtn = previewModal.querySelector(".select-preview-image");
+        const cancelBtn = previewModal.querySelector(".cancel-preview");
+        const closeBtn = previewModal.querySelector(".close-preview");
+
+        const closePreview = () => {
+          previewModal.style.display = "none";
+          document.body.style.overflow = "";
+          // Show navigation footer since we're going back to main view
+          const nav = document.querySelector(".question-nav");
+          if (nav) {
+            nav.style.display = "flex";
+          }
+        };
+
+        selectBtn.onclick = async () => {
+          if (!currentQuestionForImage) return;
+
+          try {
+            const response = await fetch(
+              `/api/question/${currentQuestionForImage}/image`,
+              {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify({ image_url: image.url }),
+              }
+            );
+
+            if (!response.ok) {
+              const errorText = await response.text();
+              throw new Error(
+                `Server responded with ${response.status}: ${errorText}`
+              );
+            }
+
+            const result = await response.json();
+            if (result.status === "success") {
+              // Store last viewed page and file
+              localStorage.setItem(
+                "lastImagePage",
+                currentImagePage.toString()
+              );
+              localStorage.setItem("lastImageFile", imageFileSelect.value);
+
+              // Refresh the question display
+              displayQuestionDetails(currentQuestionForImage);
+              closePreview();
+              closeImageBrowser();
+            } else {
+              alert(
+                "Error setting image: " + (result.error || "Unknown error")
+              );
+            }
+          } catch (err) {
+            console.error("Error setting image:", err);
+            alert("Error setting image: " + err.message);
+          }
+        };
+
+        cancelBtn.onclick = closePreview;
+        closeBtn.onclick = closePreview;
+
+        // Close on escape key
+        document.addEventListener("keydown", function escListener(e) {
+          if (e.key === "Escape") {
+            closePreview();
+            document.removeEventListener("keydown", escListener);
+          }
+        });
+
+        // Close on outside click
+        previewModal.addEventListener("click", function modalClick(e) {
+          if (e.target === previewModal) {
+            closePreview();
+            previewModal.removeEventListener("click", modalClick);
+          }
+        });
+      }
+
+      // Function to remove an image from a question
+      async function removeImage(questionId) {
+        if (!confirm("Are you sure you want to remove this image?")) {
+          return;
+        }
+
+        try {
+          const response = await fetch(`/api/question/${questionId}/image`, {
+            method: "DELETE",
+          });
+
+          const result = await response.json();
+          if (result.status === "success") {
+            // Refresh the question details
+            displayQuestionDetails(questionId);
+          } else {
+            alert("Error removing image: " + (result.error || "Unknown error"));
+          }
+        } catch (err) {
+          console.error("Error:", err);
+          alert("Error removing image");
+        }
+      }
+
+      // Event Listeners for the image browser
+      imageFileSelect.addEventListener("change", function () {
+        if (this.value) {
+          loadImages(this.value, 1); // Reset to page 1 when changing files
+        } else {
+          imagesGrid.innerHTML =
+            '<div class="select-file-message">Please select a file</div>';
+        }
+      });
+
+      prevPageBtn.addEventListener("click", () => {
+        if (currentImagePage > 1 && imageFileSelect.value) {
+          loadImages(imageFileSelect.value, currentImagePage - 1);
+        }
+      });
+
+      nextPageBtn.addEventListener("click", () => {
+        if (currentImagePage < totalImagePages && imageFileSelect.value) {
+          loadImages(imageFileSelect.value, currentImagePage + 1);
+        }
+      });
+
+      closeModalBtn.addEventListener("click", closeImageBrowser);
+
+      // Close modal when clicking outside the content
+      imageBrowserModal.addEventListener("click", (e) => {
+        if (e.target === imageBrowserModal) {
+          closeImageBrowser();
+        }
+      });
+
+      // Keyboard navigation
+      document.addEventListener("keydown", (e) => {
+        if (imageBrowserModal.classList.contains("active")) {
+          if (e.key === "Escape") {
+            closeImageBrowser();
+          } else if (e.key === "ArrowLeft" && !prevPageBtn.disabled) {
+            prevPageBtn.click();
+          } else if (e.key === "ArrowRight" && !nextPageBtn.disabled) {
+            nextPageBtn.click();
+          }
+        }
+      });
+
+      fetchQuestions().then(() => loadFilters());
+    </script>
+  </body>
+</html>

@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+    />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <title>Consensus Dashboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css"
+      crossorigin="anonymous"
+      referrerpolicy="no-referrer"
+    />
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    {% include 'image_preview_modal.html' %} {% include 'image_modal.html' %} {%
+    include 'image_browser_modal.html' %}
+    <div class="container">
+      <h1>Consensus Dashboard</h1>
+      <div class="search-section">
+        <div class="search-bar">
+          <i class="fas fa-search search-icon"></i>
+          <input
+            type="text"
+            id="searchInput"
+            placeholder="Search by text or question ID..."
+          />
+        </div>
+      </div>
+      <div class="filters-section">
+        <div class="filters-row">
+          <div class="filter-item">
+            <label
+              ><i class="fas fa-file-alt"></i
+              ><select id="filePathDropdown">
+                <option value="all">All Files</option>
+              </select></label
+            >
+          </div>
+          <div class="filter-item">
+            <label
+              ><i class="fas fa-flag"></i
+              ><select id="statusDropdown">
+                <option value="all">All Status</option>
+              </select></label
+            >
+          </div>
+          <div class="filter-item">
+            <label
+              ><i class="fas fa-folder"></i
+              ><select id="categoryDropdown">
+                <option value="all">All Categories</option>
+              </select></label
+            >
+          </div>
+          <div class="filter-item">
+            <label
+              ><i class="fas fa-image"></i
+              ><select id="requiresImageDropdown">
+                <option value="all">All Images</option>
+                <option value="yes">Images Required</option>
+                <option value="no">No Image Required</option>
+              </select></label
+            >
+          </div>
+        </div>
+      </div>
+      <div class="question-selection">
+        <select id="questionDropdown" class="question-dropdown"></select>
+      </div>
+      <div class="question-details" id="output">
+        <p class="loading">Loading...</p>
+      </div>
+    </div>
+    <script src="/static/dashboard.js"></script>
+    <script src="/static/auth.js"></script>
+    <script src="/static/filters.js"></script>
+    <script src="/static/questions.js"></script>
+    <script src="/static/navigation.js"></script>
+    <script src="/static/edit.js"></script>
+    <script src="/static/image.js"></script>
+    <script src="/static/image_browser.js"></script>
+    <script>
+      document.addEventListener("DOMContentLoaded", () => {
+        Dashboard.setupAuth();
+        Dashboard.loadFilters(); // Load filters first
+        Dashboard.fetchQuestions().catch((err) => {
+          console.error("Initialization failed:", err);
+          document.getElementById("output").innerHTML =
+            "<p>Failed to load data. Check console for details.</p>";
+        });
+      });
+    </script>
+  </body>
+</html>

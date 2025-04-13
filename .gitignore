@@ -1,0 +1,41 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environment
+venv/
+.env
+*.env
+*.venv
+
+# Supabase credentials (avoid committing secrets!)
+supabase/.temp
+supabase/.env
+supabase/config.json
+
+# VS Code settings
+.vscode/
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# Logs & Debug files
+logs/
+*.log
+
+# System files
+.DS_Store
+Thumbs.db
+
+# Python dependencies
+pip-log.txt
+pip-delete-this-directory.txt
+
+# SQLite database (if used for local testing)
+*.sqlite3
+*.db
+
+# Render and Deployment
+render.yaml
+instance/
