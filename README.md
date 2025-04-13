@@ -1,15 +1,15 @@
 # Consensus Dashboard
 
-A modern web application for managing and analyzing questions with AI-powered insights using Google's Gemini API.
+A specialized web application for managing and correcting quiz questions in a database. The application provides an intuitive interface for editing questions, managing choices, and maintaining question quality with AI-powered explanations.
 
 ## Features
 
-- 🎯 Interactive dashboard interface
-- 🔍 Advanced search and filtering capabilities
-- 🤖 AI-powered analysis using Google Gemini
-- 🖼️ Image management with AWS S3/CloudFront integration
-- 🔐 Secure authentication system
-- 📊 Dynamic data visualization
+- 🎯 Interactive dashboard for managing quiz questions
+- 🔍 Advanced search and filtering by file path, status, and category
+- ✏️ Edit questions, add/remove choices, and select correct answers
+- 🤖 Auto-generated explanations using Google Gemini AI
+- 🖼️ Image management capabilities with AWS S3/CloudFront
+- 📊 Question status tracking (verified, likely correct, needs review)
 - 🗄️ PostgreSQL database integration via Supabase
 
 ## Prerequisites

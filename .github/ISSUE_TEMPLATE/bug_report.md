@@ -29,6 +29,15 @@ If applicable, add screenshots to help explain your problem.
 - Python Version: [e.g. 3.8.5]
 - Browser: [e.g. chrome, safari]
 - Application Version: [e.g. 1.0.0]
+- Database Status: [Are you able to connect to the database?]
+- Gemini API: [Is the API responding normally?]
+- AWS Services: [Are S3/CloudFront services accessible?]
+
+**Question Details (if applicable):**
+
+- Question ID:
+- File Path:
+- Operation being performed: [e.g. editing choices, updating explanation, managing images]
 
 **Additional context**
 Add any other context about the problem here.

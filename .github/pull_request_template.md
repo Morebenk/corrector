@@ -1,35 +1,48 @@
 ## Description
 
-Please include a summary of the change and which issue is fixed. Include relevant motivation and context.
+Please provide a summary of the changes and which issue is fixed. Include relevant motivation and context.
 
 Fixes # (issue)
 
-## Type of change
+## Type of Change
 
 Please delete options that are not relevant.
 
-- [ ] Bug fix (non-breaking change which fixes an issue)
-- [ ] New feature (non-breaking change which adds functionality)
-- [ ] Breaking change (fix or feature that would cause existing functionality to not work as expected)
-- [ ] Documentation update
+- [ ] Question Management (changes to question handling/processing)
+- [ ] Choice Management (changes to choice editing/validation)
+- [ ] Explanation System (changes to Gemini integration/explanation generation)
+- [ ] Image Handling (changes to S3/CloudFront integration)
+- [ ] UI/UX Improvements (dashboard, modals, filters)
+- [ ] Database Changes (schema updates, query optimization)
+- [ ] Bug Fix (non-breaking change that fixes an issue)
+- [ ] Documentation Update
 
-## Checklist
+## Testing Checklist
 
-Please delete options that are not relevant.
+- [ ] Tested question editing functionality
+- [ ] Verified choice management works correctly
+- [ ] Confirmed explanation generation (if applicable)
+- [ ] Tested image upload/display (if applicable)
+- [ ] Verified database operations
+- [ ] Checked filter and search functionality
+- [ ] Tested in both development and production environments
+- [ ] Added/Updated unit tests
+- [ ] Updated documentation
 
-- [ ] My code follows the style guidelines of this project
-- [ ] I have performed a self-review of my own code
-- [ ] I have commented my code, particularly in hard-to-understand areas
-- [ ] I have made corresponding changes to the documentation
-- [ ] My changes generate no new warnings
-- [ ] I have added tests that prove my fix is effective or that my feature works
-- [ ] New and existing unit tests pass locally with my changes
-- [ ] Any dependent changes have been merged and published in downstream modules
+## Database Impact
 
-## Screenshots (if appropriate)
+Describe any changes to the database schema or significant query modifications.
 
-Add screenshots here
+## Integration Testing
 
-## Further comments
+- [ ] Tested with Supabase
+- [ ] Verified Gemini API integration (if applicable)
+- [ ] Checked AWS S3/CloudFront functionality (if applicable)
 
-Add any additional context or information here
+## Screenshots
+
+Add screenshots of the changes, especially for UI modifications.
+
+## Additional Notes
+
+Any additional information that would help review the changes.
