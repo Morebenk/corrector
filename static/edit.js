@@ -63,8 +63,39 @@ Dashboard.renderEditForm = function (q) {
   saveAndMarkButton.addEventListener("click", async () => {
     if (await Dashboard.saveEdits(q.id, true)) {
       await fetch(`/api/question/${q.id}/mark-corrected`, { method: "POST" });
-      await Dashboard.fetchQuestions();
-      Dashboard.loadFilters();
+
+      // Update local data
+      const question = Dashboard.questionsData.find((q_) => q_.id === q.id);
+      if (question) {
+        question.status = "corrected";
+      }
+
+      // Clear cache for this question
+      const filePathFilter = document.getElementById("filePathDropdown").value;
+      const cacheKey = `${q.id}-${filePathFilter}`;
+      delete Dashboard.questionDetailsCache[cacheKey];
+
+      // Re-render with updated data and move to next question
+      const currentIndex = [
+        ...document.getElementById("questionDropdown").options,
+      ].findIndex((option) => parseInt(option.value) === q.id);
+
+      Dashboard.populateQuestions();
+
+      // Move to next question
+      const questionDropdown = document.getElementById("questionDropdown");
+      const nextIndex = Math.min(
+        currentIndex + 1,
+        questionDropdown.options.length - 1
+      );
+      if (nextIndex >= 0) {
+        questionDropdown.selectedIndex = nextIndex;
+        const nextQuestionId = parseInt(
+          questionDropdown.options[nextIndex].value
+        );
+        Dashboard.displayQuestionDetails(nextQuestionId, true);
+      }
+
       cleanupNavWarning();
     }
   });
@@ -349,8 +380,27 @@ Dashboard.saveEdits = async function (questionId, skipSuccessMessage = false) {
     if (result.status === "success") {
       form.dataset.hasChanges = "false";
       if (!skipSuccessMessage) alert("Update successful!");
-      await Dashboard.fetchQuestions();
-      if (!skipSuccessMessage) Dashboard.displayQuestionDetails(questionId);
+
+      // Clear the cache entry for this question
+      const filePathFilter = document.getElementById("filePathDropdown").value;
+      const cacheKey = `${questionId}-${filePathFilter}`;
+      delete Dashboard.questionDetailsCache[cacheKey];
+
+      // Update the question in questionsData
+      const question = Dashboard.questionsData.find((q) => q.id === questionId);
+      if (question) {
+        question.enhanced_text = data.enhanced_text;
+        question.category = data.category;
+        question.requires_image = data.requires_image;
+        question.status = data.status || question.status;
+      }
+
+      // Only reload questions if needed
+      if (!skipSuccessMessage) {
+        // Re-render the current view with updated data
+        Dashboard.populateQuestions();
+        Dashboard.displayQuestionDetails(questionId);
+      }
       return true;
     } else {
       alert("Update failed: " + (result.error || "Unknown error"));

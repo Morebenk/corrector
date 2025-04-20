@@ -17,10 +17,14 @@ const escapeHTML = (str) =>
       ])
   );
 
+// Initialize cache
+Dashboard.questionDetailsCache = {};
+
 Dashboard.fetchQuestions = async function () {
   try {
     document.getElementById("output").innerHTML =
       "<p class='loading'>Loading questions...</p>";
+
     const filePathFilter = document.getElementById("filePathDropdown").value;
     const url =
       filePathFilter && filePathFilter !== "all"
@@ -29,6 +33,7 @@ Dashboard.fetchQuestions = async function () {
     const response = await fetch(url);
     const data = await response.json();
     if (data.error) throw new Error(data.error);
+
     Dashboard.questionsData = data.questions;
     Dashboard.availableFilePaths = data.available_files || [];
     Dashboard.uniqueCategories = [
@@ -41,13 +46,26 @@ Dashboard.fetchQuestions = async function () {
       ])
     );
     Dashboard.populateFilters();
+
+    // Restore last used filter if available
+    const lastFilePathFilter = localStorage.getItem("lastFilePathFilter");
+    const filePathDropdown = document.getElementById("filePathDropdown");
+    if (lastFilePathFilter && filePathDropdown) {
+      const filterOption = Array.from(filePathDropdown.options).find(
+        (opt) => opt.value === lastFilePathFilter
+      );
+      if (filterOption) {
+        filePathDropdown.value = lastFilePathFilter;
+      }
+    }
+
     Dashboard.populateQuestions();
   } catch (err) {
     Dashboard.showError(`Error loading questions: ${err.message}`);
   }
 };
 
-Dashboard.populateQuestions = function () {
+Dashboard.populateQuestions = function (preserveSelection = false) {
   const statusFilter = document.getElementById("statusDropdown").value;
   const categoryFilter = document.getElementById("categoryDropdown").value;
   const searchQuery = document
@@ -57,10 +75,20 @@ Dashboard.populateQuestions = function () {
     "requiresImageDropdown"
   ).value;
   const questionDropdown = document.getElementById("questionDropdown");
-  const filePathFilter = document.getElementById("filePathDropdown").value;
+
+  // Get filePathFilter and store it in localStorage
+  const filePathDropdown = document.getElementById("filePathDropdown");
+  const filePathFilter = filePathDropdown.value;
+  localStorage.setItem("lastFilePathFilter", filePathFilter);
+
+  // Store current selection if needed
+  const currentSelectedId = preserveSelection
+    ? parseInt(questionDropdown.value)
+    : null;
 
   questionDropdown.innerHTML = "";
 
+  // Apply filters entirely client-side
   const filtered = Dashboard.questionsData.filter((q) => {
     const matchesStatus = statusFilter === "all" || q.status === statusFilter;
     const matchesCategory =
@@ -135,8 +163,22 @@ Dashboard.populateQuestions = function () {
       }[q.status] || "";
     questionDropdown.appendChild(option);
   });
-  questionDropdown.selectedIndex = 0;
-  Dashboard.displayQuestionDetails(filtered[0].id);
+  // Restore selection or default to first item
+  if (preserveSelection && currentSelectedId) {
+    const selectedIndex = [...questionDropdown.options].findIndex(
+      (option) => parseInt(option.value) === currentSelectedId
+    );
+    if (selectedIndex >= 0) {
+      questionDropdown.selectedIndex = selectedIndex;
+      Dashboard.displayQuestionDetails(currentSelectedId, true);
+    } else {
+      questionDropdown.selectedIndex = 0;
+      Dashboard.displayQuestionDetails(filtered[0].id);
+    }
+  } else {
+    questionDropdown.selectedIndex = 0;
+    Dashboard.displayQuestionDetails(filtered[0].id);
+  }
 };
 
 Dashboard.displayQuestionDetails = async function (
@@ -147,15 +189,28 @@ Dashboard.displayQuestionDetails = async function (
   try {
     document.getElementById("output").innerHTML =
       "<p class='loading'>Loading details...</p>";
+
+    let q;
     const filePathFilter = document.getElementById("filePathDropdown").value;
-    const url =
-      filePathFilter && filePathFilter !== "all"
-        ? `/api/question/${questionId}?file_path=${encodeURIComponent(
-            filePathFilter
-          )}`
-        : `/api/question/${questionId}`;
-    const response = await fetch(url);
-    const q = await response.json();
+    const cacheKey = `${questionId}-${filePathFilter}`;
+
+    // Try to get from cache first
+    if (Dashboard.questionDetailsCache[cacheKey]) {
+      q = Dashboard.questionDetailsCache[cacheKey];
+    } else {
+      const url =
+        filePathFilter && filePathFilter !== "all"
+          ? `/api/question/${questionId}?file_path=${encodeURIComponent(
+              filePathFilter
+            )}`
+          : `/api/question/${questionId}`;
+      const response = await fetch(url);
+      q = await response.json();
+      // Cache the response
+      if (!q.error) {
+        Dashboard.questionDetailsCache[cacheKey] = q;
+      }
+    }
     if (q.error) {
       Dashboard.showError(q.error);
       return;
@@ -370,11 +425,42 @@ Dashboard.handleMarkAsCorrect = async function (questionId, buttonId) {
       method: "POST",
     });
     const result = await response.json();
-    if (result.status === "success") {
-      await Dashboard.fetchQuestions();
-      Dashboard.loadFilters();
-      Dashboard.displayQuestionDetails(questionId);
-    } else throw new Error(result.error || "Unknown error");
+
+    if (result.status === "success" || !result.error) {
+      // Update local data instead of reloading everything
+      const question = Dashboard.questionsData.find((q) => q.id === questionId);
+      if (question) {
+        question.status = "corrected";
+        // Clear the cache for this question
+        const filePathFilter =
+          document.getElementById("filePathDropdown").value;
+        const cacheKey = `${questionId}-${filePathFilter}`;
+        delete Dashboard.questionDetailsCache[cacheKey];
+      }
+
+      // Re-render the current state
+      const currentIndex = [
+        ...document.getElementById("questionDropdown").options,
+      ].findIndex((option) => parseInt(option.value) === questionId);
+
+      Dashboard.populateQuestions(true); // Preserve selection when repopulating
+
+      // Restore selection to the next question
+      const questionDropdown = document.getElementById("questionDropdown");
+      const nextIndex = Math.min(
+        currentIndex + 1,
+        questionDropdown.options.length - 1
+      );
+      if (nextIndex >= 0) {
+        questionDropdown.selectedIndex = nextIndex;
+        const nextQuestionId = parseInt(
+          questionDropdown.options[nextIndex].value
+        );
+        Dashboard.displayQuestionDetails(nextQuestionId, true);
+      }
+    } else {
+      throw new Error(result.error || "Unknown error");
+    }
   } catch (err) {
     console.error("Error:", err);
     alert("Error marking question as corrected");

@@ -17,6 +17,11 @@ Dashboard.openImageBrowser = async function (
     console.error("Image browser modal not found");
     return;
   }
+
+  // Hide the question navigation footer
+  const nav = document.querySelector(".question-nav");
+  if (nav) nav.style.display = "none";
+
   imageBrowserModal.classList.add("active");
   document.body.style.overflow = "hidden";
 
@@ -179,12 +184,21 @@ Dashboard.loadImages = async function (file, pageNumber, questionNumber) {
 };
 
 Dashboard.closeImageBrowser = function () {
+  const previewModal = document.getElementById("imagePreviewModal");
+  // Don't close the browser if preview is open
+  if (previewModal && previewModal.style.display === "flex") {
+    return;
+  }
+
   const imageBrowserModal = document.getElementById("imageBrowserModal");
   if (imageBrowserModal) {
     imageBrowserModal.classList.remove("active");
     document.body.style.overflow = "";
+    // Show the question navigation footer when closing browser
     const nav = document.querySelector(".question-nav");
     if (nav) nav.style.display = "flex";
+    // Reset z-index
+    imageBrowserModal.style.zIndex = "";
   }
 };
 
@@ -274,7 +288,14 @@ Dashboard.showImagePreview = async function (image) {
   }
   const previewImage = document.getElementById("previewImage");
   previewImage.src = image.url;
+
+  // Ensure image browser modal stays visible but behind preview
+  const imageBrowserModal = document.getElementById("imageBrowserModal");
+  if (imageBrowserModal) {
+    imageBrowserModal.style.zIndex = "2000";
+  }
   previewModal.style.display = "flex";
+  previewModal.style.zIndex = "3000";
   document.body.style.overflow = "hidden";
 
   const selectBtn = previewModal.querySelector(".select-preview-image");
@@ -284,8 +305,6 @@ Dashboard.showImagePreview = async function (image) {
   const closePreview = () => {
     previewModal.style.display = "none";
     document.body.style.overflow = "";
-    const nav = document.querySelector(".question-nav");
-    if (nav) nav.style.display = "flex";
   };
 
   selectBtn.onclick = async () => {
@@ -305,6 +324,13 @@ Dashboard.showImagePreview = async function (image) {
         );
       const result = await response.json();
       if (result.status === "success") {
+        // Clear the cache for this question
+        const filePathFilter =
+          document.getElementById("filePathDropdown").value;
+        const cacheKey = `${Dashboard.currentQuestionForImage}-${filePathFilter}`;
+        delete Dashboard.questionDetailsCache[cacheKey];
+
+        // Store last used page and file for convenience
         localStorage.setItem(
           "lastImagePage",
           Dashboard.currentImagePage.toString()
@@ -313,9 +339,22 @@ Dashboard.showImagePreview = async function (image) {
           "lastImageFile",
           document.getElementById("imageFileSelect").value
         );
-        Dashboard.displayQuestionDetails(Dashboard.currentQuestionForImage);
+
+        // Update the question data in memory
+        const question = Dashboard.questionsData.find(
+          (q) => q.id === Dashboard.currentQuestionForImage
+        );
+        if (question) {
+          question.image_url = image.url;
+        }
+
         closePreview();
         Dashboard.closeImageBrowser();
+
+        // Re-render the question details to show the updated image
+        await Dashboard.displayQuestionDetails(
+          Dashboard.currentQuestionForImage
+        );
       } else {
         alert("Error setting image: " + (result.error || "Unknown error"));
       }

@@ -837,7 +837,7 @@ button:disabled {
   width: 100%;
   height: 100%;
   background-color: rgba(0, 0, 0, 0.85);
-  z-index: 1000;
+  z-index: 2000;
   opacity: 0;
   transition: opacity 0.3s ease;
 }
@@ -987,10 +987,14 @@ button:disabled {
   width: 100%;
   height: 100%;
   background-color: rgba(0, 0, 0, 0.85);
-  z-index: 1000;
+  z-index: 2500;
   cursor: pointer;
   opacity: 0;
   transition: opacity 0.3s ease;
+}
+
+.image-modal .modal-content {
+  z-index: 2501;
 }
 
 .image-modal.active {
@@ -1470,6 +1474,10 @@ button:disabled {
   overflow: hidden;
 }
 
+.image-browser-content {
+  z-index: 2001;
+}
+
 .image-browser-modal.active {
   display: flex;
   justify-content: center;
@@ -1763,7 +1771,7 @@ button:disabled {
   width: 100%;
   height: 100%;
   background-color: rgba(0, 0, 0, 0.9);
-  z-index: 1100;
+  z-index: 3000;
   justify-content: center;
   align-items: center;
   opacity: 0;
@@ -1774,7 +1782,7 @@ button:disabled {
   opacity: 1;
 }
 
-.preview-container {
+.image-preview-content {
   background-color: var(--white);
   border-radius: var(--radius);
   max-width: 90%;
@@ -1786,9 +1794,11 @@ button:disabled {
   transform: translateY(20px);
   transition: transform 0.3s ease;
   box-shadow: var(--shadow-lg);
+  position: relative;
+  z-index: 3001;
 }
 
-.image-preview-modal[style*="display: flex"] .preview-container {
+.image-preview-modal[style*="display: flex"] .image-preview-content {
   transform: translateY(0);
 }
 
@@ -1948,13 +1958,16 @@ button:disabled {
   align-items: center;
 }
 
-.modal-content {
+/* Common modal content styles */
+.modal .modal-content {
   background: white;
   padding: 20px;
-  border-radius: 5px;
+  border-radius: var(--radius);
   max-width: 80%;
   max-height: 80%;
   overflow: auto;
+  position: relative;
+  z-index: inherit;
 }
 
 .image-browser-modal .images-grid {

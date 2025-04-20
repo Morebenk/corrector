@@ -53,7 +53,19 @@ Dashboard.removeImage = async function (questionId) {
     });
     const result = await response.json();
     if (result.status === "success") {
-      Dashboard.displayQuestionDetails(questionId);
+      // Clear the cache for this question
+      const filePathFilter = document.getElementById("filePathDropdown").value;
+      const cacheKey = `${questionId}-${filePathFilter}`;
+      delete Dashboard.questionDetailsCache[cacheKey];
+
+      // Update the question data in memory
+      const question = Dashboard.questionsData.find((q) => q.id === questionId);
+      if (question) {
+        question.image_url = null;
+      }
+
+      // Re-render to show the updated state
+      await Dashboard.displayQuestionDetails(questionId);
     } else alert("Error removing image: " + (result.error || "Unknown error"));
   } catch (err) {
     console.error("Error:", err);
