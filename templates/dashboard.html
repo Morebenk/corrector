@@ -91,14 +91,20 @@
     <script src="/static/image.js"></script>
     <script src="/static/image_browser.js"></script>
     <script>
-      document.addEventListener("DOMContentLoaded", () => {
+      document.addEventListener("DOMContentLoaded", async () => {
         Dashboard.setupAuth();
-        Dashboard.loadFilters(); // Load filters first
-        Dashboard.fetchQuestions().catch((err) => {
+        Dashboard.setupFilterListeners();
+        try {
+          await Dashboard.fetchQuestions();
+          // After data is loaded, populate filters while preserving saved values
+          Dashboard.populateFilters(true);
+          // Then populate questions based on the filters
+          Dashboard.populateQuestions(true);
+        } catch (err) {
           console.error("Initialization failed:", err);
           document.getElementById("output").innerHTML =
             "<p>Failed to load data. Check console for details.</p>";
-        });
+        }
       });
     </script>
   </body>

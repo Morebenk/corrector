@@ -1058,9 +1058,27 @@ button:disabled {
 }
 
 /* Status Button */
-.status-button {
-  background: linear-gradient(90deg, #2ecc71, #27ae60);
+.status-buttons {
+  display: flex;
+  gap: 1rem;
   margin-bottom: 1rem;
+  flex-wrap: wrap;
+}
+
+.status-button {
+  margin: 0;
+}
+
+.status-button.corrected {
+  background: linear-gradient(90deg, #2ecc71, #27ae60);
+}
+
+.status-button.incorrect {
+  background: linear-gradient(90deg, #e74c3c, #c0392b);
+}
+
+.status-button.review {
+  background: linear-gradient(90deg, #f39c12, #d35400);
 }
 
 .status-button i {

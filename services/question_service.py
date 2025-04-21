@@ -106,7 +106,6 @@ def get_questions(engine, file_path_filter=None):
         return {'error': 'An unexpected database error occurred'}
 
 
-
 def get_question_details(engine, question_id, file_path_filter=None):
     try:
         with engine.connect() as conn:
@@ -114,13 +113,14 @@ def get_question_details(engine, question_id, file_path_filter=None):
                 SELECT eq.enhanced_text, eq.category, eq.status, eq.explanation,
                        eq.requires_image, eq.image_url,
                        STRING_AGG(ec.choice_text, '||') AS choices,
-                       STRING_AGG(ec.is_correct::BOOLEAN::TEXT, '||') AS is_correct
+                       STRING_AGG(ec.is_correct::BOOLEAN::TEXT, '||') AS is_correct,
+                       q.question_text AS original_question_text
                 FROM enhanced_questions eq
                 JOIN questions q ON q.id = eq.question_id
                 LEFT JOIN enhanced_choices ec ON eq.id = ec.enhanced_question_id
                 WHERE eq.id = :question_id
-                GROUP BY eq.id, eq.enhanced_text, eq.category, eq.status, eq.explanation, 
-                         eq.requires_image, eq.image_url
+                GROUP BY eq.id, eq.enhanced_text, eq.category, eq.status, eq.explanation,
+                         eq.requires_image, eq.image_url, q.question_text
             """)
             result = conn.execute(query, {'question_id': question_id})
             row = result.fetchone()
@@ -129,7 +129,7 @@ def get_question_details(engine, question_id, file_path_filter=None):
                 return {'error': 'Question not found'}
 
             q_text, category, status, explanation, requires_image, image_url, \
-            choices_text, is_correct_text = row
+            choices_text, is_correct_text, original_question_text = row
 
             # Determine file information based on file_path_filter
             file_query = text("""
@@ -218,6 +218,7 @@ def get_question_details(engine, question_id, file_path_filter=None):
             return {
                 'id': question_id,
                 'enhanced_text': q_text,
+                'original_question_text': original_question_text,
                 'category': category,
                 'status': status,
                 'explanation': explanation,
@@ -351,15 +352,24 @@ def update_question(engine, question_id, data):
         return {'error': 'An unexpected database error occurred'}
 
 
-def mark_question_corrected(engine, question_id):
+def update_question_status(engine, question_id, status):
     try:
         with engine.begin() as conn:
             conn.execute(text("""
                 UPDATE enhanced_questions
-                SET status = 'corrected'
+                SET status = :status
                 WHERE id = :question_id
-            """), {'question_id': question_id})
+            """), {'question_id': question_id, 'status': status})
         return {}
     except SQLAlchemyError as e:
-        logger.exception("Database error in mark_question_corrected")
+        logger.exception(f"Database error in update_question_status to {status}")
         return {'error': f'Database error: {str(e)}'}
+
+def mark_question_corrected(engine, question_id):
+    return update_question_status(engine, question_id, 'corrected')
+
+def mark_question_incorrect(engine, question_id):
+    return update_question_status(engine, question_id, 'incorrect')
+
+def mark_question_needs_review(engine, question_id):
+    return update_question_status(engine, question_id, 'needs_review')

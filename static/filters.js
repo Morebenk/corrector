@@ -40,7 +40,47 @@ Dashboard.loadFilters = function () {
   }
 };
 
-Dashboard.populateFilters = function () {
+Dashboard.setupFilterListeners = function () {
+  // Add change event listeners to all filter inputs
+  const filterIds = [
+    "statusDropdown",
+    "categoryDropdown",
+    "searchInput",
+    "requiresImageDropdown",
+    "filePathDropdown",
+  ];
+
+  filterIds.forEach((id) => {
+    const element = document.getElementById(id);
+    if (element) {
+      if (id === "searchInput") {
+        // For search, use input event to catch changes as user types
+        element.addEventListener("input", () => {
+          Dashboard.saveFilters();
+          Dashboard.populateQuestions(true);
+        });
+      } else {
+        element.addEventListener("change", () => {
+          Dashboard.saveFilters();
+          Dashboard.populateQuestions(true);
+        });
+      }
+    }
+  });
+};
+
+// Initialize filter listeners when document is ready
+document.addEventListener("DOMContentLoaded", () => {
+  Dashboard.setupFilterListeners();
+});
+
+Dashboard.populateFilters = function (preserveFilters = true) {
+  // Get saved filters if we want to preserve them
+  const savedFilters = preserveFilters
+    ? JSON.parse(localStorage.getItem("dashboardFilters") || "{}")
+    : {};
+
+  // Populate status dropdown
   const statusDropdown = document.getElementById("statusDropdown");
   statusDropdown.innerHTML = '<option value="all">All Statuses</option>';
   Array.from(new Set(Dashboard.questionsData.map((q) => q.status)))
@@ -52,6 +92,7 @@ Dashboard.populateFilters = function () {
       statusDropdown.appendChild(option);
     });
 
+  // Populate category dropdown
   const categoryDropdown = document.getElementById("categoryDropdown");
   categoryDropdown.innerHTML = '<option value="all">All Categories</option>';
   Array.from(Dashboard.uniqueCategories)
@@ -63,8 +104,8 @@ Dashboard.populateFilters = function () {
       categoryDropdown.appendChild(option);
     });
 
+  // Populate file path dropdown
   const filePathDropdown = document.getElementById("filePathDropdown");
-  const currentSelection = filePathDropdown.value;
   filePathDropdown.innerHTML = '<option value="all">All Files</option>';
   Dashboard.availableFilePaths.sort().forEach((filePath) => {
     const option = document.createElement("option");
@@ -74,7 +115,17 @@ Dashboard.populateFilters = function () {
     option.title = filePath;
     filePathDropdown.appendChild(option);
   });
-  if (currentSelection && currentSelection !== "all") {
-    filePathDropdown.value = currentSelection;
+
+  if (preserveFilters) {
+    // Restore all filter values
+    if (savedFilters.status) statusDropdown.value = savedFilters.status;
+    if (savedFilters.category) categoryDropdown.value = savedFilters.category;
+    if (savedFilters.filePath) filePathDropdown.value = savedFilters.filePath;
+    if (savedFilters.search)
+      document.getElementById("searchInput").value = savedFilters.search;
+    if (savedFilters.requiresImage) {
+      document.getElementById("requiresImageDropdown").value =
+        savedFilters.requiresImage;
+    }
   }
 };

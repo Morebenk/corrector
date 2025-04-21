@@ -1,5 +1,8 @@
 from flask import jsonify, request, render_template
-from services.question_service import get_questions, get_question_details, update_question, mark_question_corrected
+from services.question_service import (
+    get_questions, get_question_details, update_question,
+    mark_question_corrected, mark_question_incorrect, mark_question_needs_review
+)
 from services.image_service import handle_image, get_image_files, get_file_images, get_page_images, get_available_pages
 from services.gemini_service import generate_explanation
 from services.utils import get_all_files
@@ -44,6 +47,20 @@ def init_routes(app, engine):
     @app.route('/api/question/<int:question_id>/mark-corrected', methods=['POST'])
     def mark_question_corrected_route(question_id):
         result = mark_question_corrected(engine, question_id)
+        if 'error' in result:
+            return jsonify({'status': 'error', 'error': result['error']}), 500
+        return jsonify({'status': 'success'})
+
+    @app.route('/api/question/<int:question_id>/mark-incorrect', methods=['POST'])
+    def mark_question_incorrect_route(question_id):
+        result = mark_question_incorrect(engine, question_id)
+        if 'error' in result:
+            return jsonify({'status': 'error', 'error': result['error']}), 500
+        return jsonify({'status': 'success'})
+
+    @app.route('/api/question/<int:question_id>/mark-needs-review', methods=['POST'])
+    def mark_question_needs_review_route(question_id):
+        result = mark_question_needs_review(engine, question_id)
         if 'error' in result:
             return jsonify({'status': 'error', 'error': result['error']}), 500
         return jsonify({'status': 'success'})

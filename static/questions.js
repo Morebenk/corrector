@@ -261,11 +261,34 @@ Dashboard.displayQuestionDetails = async function (
     }
     html += `</p>`;
 
+    // Add status buttons if not already marked as corrected
     if (q.status !== "corrected") {
-      const buttonId = `markCorrectedBtn_${q.id}`;
-      html += `<button id="${buttonId}" class="status-button" onclick="Dashboard.handleMarkAsCorrect(${q.id}, '${buttonId}')"><i class="fas fa-check-circle"></i> Mark as Corrected</button>`;
+      const statusButtons = `
+        <div class="status-buttons">
+          <button id="markCorrectedBtn_${q.id}" class="status-button corrected" onclick="Dashboard.handleStatusUpdate(${q.id}, 'corrected', 'markCorrectedBtn_${q.id}')">
+            <i class="fas fa-check-circle"></i> Mark as Corrected
+          </button>
+          <button id="markIncorrectBtn_${q.id}" class="status-button incorrect" onclick="Dashboard.handleStatusUpdate(${q.id}, 'incorrect', 'markIncorrectBtn_${q.id}')">
+            <i class="fas fa-times-circle"></i> Mark as Incorrect
+          </button>
+          <button id="markReviewBtn_${q.id}" class="status-button review" onclick="Dashboard.handleStatusUpdate(${q.id}, 'needs_review', 'markReviewBtn_${q.id}')">
+            <i class="fas fa-question-circle"></i> Needs Review
+          </button>
+        </div>
+      `;
+      html += statusButtons;
     }
-    html += `<p>${escapeHTML(q.enhanced_text)}</p>`;
+    html += `
+      <div class="question-text">
+        <p>${escapeHTML(q.enhanced_text)}</p>
+        ${
+          q.original_question_text
+            ? `<p class="original-text" style="font-size: 0.85em; color: #666; margin-top: 8px; font-style: italic;">
+            Original: ${escapeHTML(q.original_question_text)}
+          </p>`
+            : ""
+        }
+      </div>`;
     html += `
       <div class="image-section">
         <div class="image-requirement ${
@@ -413,15 +436,19 @@ Dashboard.displayQuestionDetails = async function (
   }
 };
 
-Dashboard.handleMarkAsCorrect = async function (questionId, buttonId) {
+Dashboard.handleStatusUpdate = async function (questionId, status, buttonId) {
   const btn = document.getElementById(buttonId);
   if (!btn) return;
 
   try {
     btn.disabled = true;
-    btn.innerHTML =
-      '<i class="fas fa-spinner fa-spin"></i> Marking as corrected...';
-    const response = await fetch(`/api/question/${questionId}/mark-corrected`, {
+    const statusMessages = {
+      corrected: "Marking as corrected...",
+      incorrect: "Marking as incorrect...",
+      needs_review: "Marking for review...",
+    };
+    btn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> ${statusMessages[status]}`;
+    const response = await fetch(`/api/question/${questionId}/mark-${status}`, {
       method: "POST",
     });
     const result = await response.json();
