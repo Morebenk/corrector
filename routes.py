@@ -44,9 +44,19 @@ def init_routes(app, engine):
             return jsonify({'status': 'error', 'error': result['error']}), 400
         return jsonify({'status': 'success', 'explanation': result['explanation']})
 
-    @app.route('/api/question/<int:question_id>/mark-corrected', methods=['POST'])
-    def mark_question_corrected_route(question_id):
-        result = mark_question_corrected(engine, question_id)
+    @app.route('/api/question/<int:question_id>/mark-<status>', methods=['POST'])
+    def update_question_status_route(question_id, status):
+        if status not in ['corrected', 'incorrect', 'needs_review']:
+            return jsonify({'status': 'error', 'error': 'Invalid status'}), 400
+            
+        # Map URL status to function name
+        status_functions = {
+            'corrected': mark_question_corrected,
+            'incorrect': mark_question_incorrect,
+            'needs_review': mark_question_needs_review
+        }
+        
+        result = status_functions[status](engine, question_id)
         if 'error' in result:
             return jsonify({'status': 'error', 'error': result['error']}), 500
         return jsonify({'status': 'success'})

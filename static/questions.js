@@ -324,16 +324,30 @@ Dashboard.displayQuestionDetails = async function (
     html += `</div>`;
 
     const correctIndex = q.is_correct.findIndex((val) => val === "true");
-    html += `<div class="section-title">Choices:</div><ul>`;
+    html += `<div class="section-title">Choices:</div>
+    <div class="choices-list">`;
     q.choices.forEach((choice, i) => {
-      html +=
-        i === correctIndex
-          ? `<li style="background: #e6ffe6; padding: 8px; border-radius: 5px;">✓ ${escapeHTML(
-              choice
-            )}</li>`
-          : `<li>${escapeHTML(choice)}</li>`;
+      const isCorrect = i === correctIndex;
+      html += `
+        <div class="choice-item ${
+          isCorrect ? "correct" : ""
+        }" data-index="${i}">
+          <label class="choice-label">
+            <input type="radio" name="choice_${q.id}" value="${i}" ${
+        isCorrect ? "checked" : ""
+      }
+                   onchange="Dashboard.handleDirectChoiceUpdate(${q.id}, ${i})">
+            <span class="choice-text">${escapeHTML(choice)}</span>
+          </label>
+          <button class="quick-action-btn" onclick="Dashboard.handleDirectChoiceSave(${
+            q.id
+          }, ${i})"
+                  title="Save as correct and mark corrected">
+            <i class="fas fa-check-circle"></i>
+          </button>
+        </div>`;
     });
-    html += `</ul>`;
+    html += `</div>`;
 
     html += `
       <div class="section-title" data-toggle="explanation">Explanation: <span>▼</span></div>
@@ -447,6 +461,112 @@ Dashboard.handleStatusUpdate = async function (questionId, status, buttonId) {
       incorrect: "Marking as incorrect...",
       needs_review: "Marking for review...",
     };
+
+    // Store current position in dropdown before updating
+    const dropdown = document.getElementById("questionDropdown");
+    const currentPosition = dropdown.selectedIndex;
+
+    Dashboard.handleDirectChoiceUpdate = async function (
+      questionId,
+      selectedIndex
+    ) {
+      // Get current question data
+      const savedFilters = localStorage.getItem("dashboardFilters");
+      const filePath = savedFilters ? JSON.parse(savedFilters).filePath : null;
+      const response = await fetch(
+        `/api/question/${questionId}${
+          filePath ? `?file_path=${encodeURIComponent(filePath)}` : ""
+        }`
+      );
+      const q = await response.json();
+
+      // Prepare question data with new correct choice
+      const data = {
+        enhanced_text: q.enhanced_text,
+        category: q.category,
+        explanation: q.explanation || "",
+        requires_image: q.requires_image,
+        choices: q.choices.map((text, i) => ({
+          text,
+          is_correct: i === selectedIndex,
+        })),
+      };
+
+      // Save the changes
+      const updateResponse = await fetch(`/api/question/${questionId}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+
+      if (updateResponse.ok) {
+        // Refresh the display
+        Dashboard.displayQuestionDetails(questionId);
+      } else {
+        alert("Failed to update choice");
+      }
+    };
+
+    Dashboard.handleDirectChoiceSave = async function (
+      questionId,
+      selectedIndex
+    ) {
+      try {
+        // First update the choice
+        await Dashboard.handleDirectChoiceUpdate(questionId, selectedIndex);
+
+        // Then mark as corrected
+        const response = await fetch(
+          `/api/question/${questionId}/mark-corrected`,
+          {
+            method: "POST",
+          }
+        );
+
+        if (response.ok) {
+          // Update local data
+          const question = Dashboard.questionsData.find(
+            (q) => q.id === questionId
+          );
+          if (question) {
+            question.status = "corrected";
+          }
+
+          // Clear cache
+          const filePathFilter =
+            document.getElementById("filePathDropdown").value;
+          const cacheKey = `${questionId}-${filePathFilter}`;
+          delete Dashboard.questionDetailsCache[cacheKey];
+
+          // Store current position before updating
+          const dropdown = document.getElementById("questionDropdown");
+          const currentPosition = dropdown.selectedIndex;
+
+          // Repopulate questions and move to next question at same position
+          Dashboard.populateQuestions(false); // Don't preserve old selection
+
+          // Select the same position in the new filtered list
+          const newDropdown = document.getElementById("questionDropdown");
+          if (newDropdown.options.length > 0) {
+            // Use the same position, but don't exceed the list bounds
+            const nextPosition = Math.min(
+              currentPosition,
+              newDropdown.options.length - 1
+            );
+            newDropdown.selectedIndex = nextPosition;
+            const nextQuestionId = parseInt(
+              newDropdown.options[nextPosition].value
+            );
+            Dashboard.displayQuestionDetails(nextQuestionId);
+          }
+        } else {
+          alert("Failed to mark question as corrected");
+        }
+      } catch (err) {
+        console.error("Error:", err);
+        alert("Error updating question");
+      }
+    };
     btn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> ${statusMessages[status]}`;
     const response = await fetch(`/api/question/${questionId}/mark-${status}`, {
       method: "POST",
@@ -457,7 +577,7 @@ Dashboard.handleStatusUpdate = async function (questionId, status, buttonId) {
       // Update local data instead of reloading everything
       const question = Dashboard.questionsData.find((q) => q.id === questionId);
       if (question) {
-        question.status = "corrected";
+        question.status = status;
         // Clear the cache for this question
         const filePathFilter =
           document.getElementById("filePathDropdown").value;
@@ -465,25 +585,20 @@ Dashboard.handleStatusUpdate = async function (questionId, status, buttonId) {
         delete Dashboard.questionDetailsCache[cacheKey];
       }
 
-      // Re-render the current state
-      const currentIndex = [
-        ...document.getElementById("questionDropdown").options,
-      ].findIndex((option) => parseInt(option.value) === questionId);
+      // Repopulate questions and move to next question at same position
+      Dashboard.populateQuestions(false); // Don't preserve old selection
 
-      Dashboard.populateQuestions(true); // Preserve selection when repopulating
-
-      // Restore selection to the next question
-      const questionDropdown = document.getElementById("questionDropdown");
-      const nextIndex = Math.min(
-        currentIndex + 1,
-        questionDropdown.options.length - 1
-      );
-      if (nextIndex >= 0) {
-        questionDropdown.selectedIndex = nextIndex;
-        const nextQuestionId = parseInt(
-          questionDropdown.options[nextIndex].value
+      // Select the same position in the new filtered list
+      const dropdown = document.getElementById("questionDropdown");
+      if (dropdown.options.length > 0) {
+        // Use the same position, but don't exceed the list bounds
+        const nextPosition = Math.min(
+          currentPosition,
+          dropdown.options.length - 1
         );
-        Dashboard.displayQuestionDetails(nextQuestionId, true);
+        dropdown.selectedIndex = nextPosition;
+        const nextQuestionId = parseInt(dropdown.options[nextPosition].value);
+        Dashboard.displayQuestionDetails(nextQuestionId);
       }
     } else {
       throw new Error(result.error || "Unknown error");
