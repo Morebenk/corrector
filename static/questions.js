@@ -450,6 +450,99 @@ Dashboard.displayQuestionDetails = async function (
   }
 };
 
+Dashboard.handleDirectChoiceUpdate = async function (
+  questionId,
+  selectedIndex
+) {
+  // Get current question data
+  const savedFilters = localStorage.getItem("dashboardFilters");
+  const filePath = savedFilters ? JSON.parse(savedFilters).filePath : null;
+  const response = await fetch(
+    `/api/question/${questionId}${
+      filePath ? `?file_path=${encodeURIComponent(filePath)}` : ""
+    }`
+  );
+  const q = await response.json();
+
+  // Prepare question data with new correct choice
+  const data = {
+    enhanced_text: q.enhanced_text,
+    category: q.category,
+    explanation: q.explanation || "",
+    requires_image: q.requires_image,
+    choices: q.choices.map((text, i) => ({
+      text,
+      is_correct: i === selectedIndex,
+    })),
+  };
+
+  // Save the changes
+  const updateResponse = await fetch(`/api/question/${questionId}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+
+  if (updateResponse.ok) {
+    // Refresh the display
+    Dashboard.displayQuestionDetails(questionId);
+  } else {
+    alert("Failed to update choice");
+  }
+};
+
+Dashboard.handleDirectChoiceSave = async function (questionId, selectedIndex) {
+  try {
+    // First update the choice
+    await Dashboard.handleDirectChoiceUpdate(questionId, selectedIndex);
+
+    // Then mark as corrected
+    const response = await fetch(`/api/question/${questionId}/mark-corrected`, {
+      method: "POST",
+    });
+
+    if (response.ok) {
+      // Update local data
+      const question = Dashboard.questionsData.find((q) => q.id === questionId);
+      if (question) {
+        question.status = "corrected";
+      }
+
+      // Clear cache
+      const filePathFilter = document.getElementById("filePathDropdown").value;
+      const cacheKey = `${questionId}-${filePathFilter}`;
+      delete Dashboard.questionDetailsCache[cacheKey];
+
+      // Store current position before updating
+      const dropdown = document.getElementById("questionDropdown");
+      const currentPosition = dropdown.selectedIndex;
+
+      // Repopulate questions and move to next question at same position
+      Dashboard.populateQuestions(false); // Don't preserve old selection
+
+      // Select the same position in the new filtered list
+      const newDropdown = document.getElementById("questionDropdown");
+      if (newDropdown.options.length > 0) {
+        // Use the same position, but don't exceed the list bounds
+        const nextPosition = Math.min(
+          currentPosition,
+          newDropdown.options.length - 1
+        );
+        newDropdown.selectedIndex = nextPosition;
+        const nextQuestionId = parseInt(
+          newDropdown.options[nextPosition].value
+        );
+        Dashboard.displayQuestionDetails(nextQuestionId);
+      }
+    } else {
+      alert("Failed to mark question as corrected");
+    }
+  } catch (err) {
+    console.error("Error:", err);
+    alert("Error updating question");
+  }
+};
+
 Dashboard.handleStatusUpdate = async function (questionId, status, buttonId) {
   const btn = document.getElementById(buttonId);
   if (!btn) return;
@@ -466,107 +559,6 @@ Dashboard.handleStatusUpdate = async function (questionId, status, buttonId) {
     const dropdown = document.getElementById("questionDropdown");
     const currentPosition = dropdown.selectedIndex;
 
-    Dashboard.handleDirectChoiceUpdate = async function (
-      questionId,
-      selectedIndex
-    ) {
-      // Get current question data
-      const savedFilters = localStorage.getItem("dashboardFilters");
-      const filePath = savedFilters ? JSON.parse(savedFilters).filePath : null;
-      const response = await fetch(
-        `/api/question/${questionId}${
-          filePath ? `?file_path=${encodeURIComponent(filePath)}` : ""
-        }`
-      );
-      const q = await response.json();
-
-      // Prepare question data with new correct choice
-      const data = {
-        enhanced_text: q.enhanced_text,
-        category: q.category,
-        explanation: q.explanation || "",
-        requires_image: q.requires_image,
-        choices: q.choices.map((text, i) => ({
-          text,
-          is_correct: i === selectedIndex,
-        })),
-      };
-
-      // Save the changes
-      const updateResponse = await fetch(`/api/question/${questionId}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-      });
-
-      if (updateResponse.ok) {
-        // Refresh the display
-        Dashboard.displayQuestionDetails(questionId);
-      } else {
-        alert("Failed to update choice");
-      }
-    };
-
-    Dashboard.handleDirectChoiceSave = async function (
-      questionId,
-      selectedIndex
-    ) {
-      try {
-        // First update the choice
-        await Dashboard.handleDirectChoiceUpdate(questionId, selectedIndex);
-
-        // Then mark as corrected
-        const response = await fetch(
-          `/api/question/${questionId}/mark-corrected`,
-          {
-            method: "POST",
-          }
-        );
-
-        if (response.ok) {
-          // Update local data
-          const question = Dashboard.questionsData.find(
-            (q) => q.id === questionId
-          );
-          if (question) {
-            question.status = "corrected";
-          }
-
-          // Clear cache
-          const filePathFilter =
-            document.getElementById("filePathDropdown").value;
-          const cacheKey = `${questionId}-${filePathFilter}`;
-          delete Dashboard.questionDetailsCache[cacheKey];
-
-          // Store current position before updating
-          const dropdown = document.getElementById("questionDropdown");
-          const currentPosition = dropdown.selectedIndex;
-
-          // Repopulate questions and move to next question at same position
-          Dashboard.populateQuestions(false); // Don't preserve old selection
-
-          // Select the same position in the new filtered list
-          const newDropdown = document.getElementById("questionDropdown");
-          if (newDropdown.options.length > 0) {
-            // Use the same position, but don't exceed the list bounds
-            const nextPosition = Math.min(
-              currentPosition,
-              newDropdown.options.length - 1
-            );
-            newDropdown.selectedIndex = nextPosition;
-            const nextQuestionId = parseInt(
-              newDropdown.options[nextPosition].value
-            );
-            Dashboard.displayQuestionDetails(nextQuestionId);
-          }
-        } else {
-          alert("Failed to mark question as corrected");
-        }
-      } catch (err) {
-        console.error("Error:", err);
-        alert("Error updating question");
-      }
-    };
     btn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> ${statusMessages[status]}`;
     const response = await fetch(`/api/question/${questionId}/mark-${status}`, {
       method: "POST",
