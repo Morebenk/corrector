@@ -1,4 +1,7 @@
 :root {
+  /* Existing variables */
+  --compact-spacing: 0.5rem;
+  --compact-border-radius: 4px;
   --primary: #4361ee;
   --primary-light: #4895ef;
   --success: #2ecc71;
@@ -333,6 +336,139 @@ button:disabled {
 .question-details {
   padding-top: 2rem;
   border-top: 1px solid var(--neutral-light);
+}
+
+/* Simplified Image Browser for Correction Mode */
+body[data-correction-mode="true"] .image-section {
+  display: block;
+  position: fixed;
+  bottom: 4rem;
+  right: 1rem;
+  width: auto;
+  background: var(--white);
+  padding: 0.5rem;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  z-index: 99;
+  transition: var(--transition);
+  max-width: 300px;
+}
+
+body[data-correction-mode="true"] .image-requirement {
+  display: none;
+}
+
+body[data-correction-mode="true"] .image-container {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+body[data-correction-mode="true"] .question-image {
+  max-height: 100px;
+  width: auto;
+  object-fit: contain;
+}
+
+body[data-correction-mode="true"] .image-buttons {
+  display: flex;
+  gap: 0.25rem;
+}
+
+body[data-correction-mode="true"] .image-button {
+  padding: 0.25rem 0.5rem;
+  font-size: 0.8rem;
+}
+
+body[data-correction-mode="true"] .image-button .button-text {
+  display: none;
+}
+
+body[data-correction-mode="true"] .image-button i {
+  margin: 0;
+}
+
+/* Mode Toggle Button */
+.mode-toggle {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 1rem;
+}
+
+.mode-toggle-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  background: var(--white);
+  border: 2px solid var(--primary);
+  color: var(--primary);
+  border-radius: var(--radius);
+  cursor: pointer;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+.mode-toggle-btn:hover {
+  background: var(--primary);
+  color: var(--white);
+}
+
+.mode-toggle-btn.active {
+  background: var(--primary);
+  color: var(--white);
+}
+
+/* Correction Mode Styles */
+body[data-correction-mode="true"] .container {
+  max-width: 800px;
+}
+
+body[data-correction-mode="true"] .search-section,
+body[data-correction-mode="true"] .filters-section,
+body[data-correction-mode="true"] .edit-sticky-header,
+body[data-correction-mode="true"] .section-title,
+body[data-correction-mode="true"] .predictions-container {
+  display: none;
+}
+
+body[data-correction-mode="true"] .question-details {
+  padding-top: var(--compact-spacing);
+  border: none;
+}
+
+body[data-correction-mode="true"] .choice-item {
+  padding: var(--compact-spacing);
+  margin: var(--compact-spacing) 0;
+  border-radius: var(--compact-border-radius);
+}
+
+body[data-correction-mode="true"] .question-text {
+  font-size: 1.1rem;
+  margin-bottom: 1rem;
+  padding: var(--compact-spacing);
+  background: var(--background);
+  border-radius: var(--compact-border-radius);
+}
+
+body[data-correction-mode="true"] .choices-list {
+  margin-top: var(--compact-spacing);
+}
+
+body[data-correction-mode="true"] .choice-item.correct {
+  border-width: 1px;
+}
+
+/* Keep edit mode functionality visible in correction mode */
+body[data-correction-mode="true"] .edit-actions {
+  position: fixed;
+  bottom: 1rem;
+  right: 1rem;
+  background: rgba(255, 255, 255, 0.9);
+  padding: 0.5rem;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  z-index: 100;
 }
 
 .section-title {

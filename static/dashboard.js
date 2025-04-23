@@ -3,14 +3,16 @@ window.Dashboard = window.Dashboard || {};
 Dashboard.questionsData = [];
 Dashboard.uniqueCategories = [];
 Dashboard.categoryColors = [
-  "#4c6fff",
-  "#6f42c1",
-  "#20c997",
-  "#8c510a",
-  "#e83e8c",
-  "#6c757d",
-  "#17a2b8",
-  "#6610f2",
+  "#4c6fff", // Blue
+  "#2ecc71", // Green
+  "#e74c3c", // Red
+  "#f39c12", // Orange
+  "#9b59b6", // Purple
+  "#1abc9c", // Turquoise
+  "#34495e", // Dark Blue
+  "#e67e22", // Pumpkin
+  "#3498db", // Light Blue
+  "#16a085", // Sea Green
 ];
 Dashboard.categoryColorMap = {};
 Dashboard.availableFilePaths = [];
@@ -57,5 +59,30 @@ function setupEventListeners() {
     });
 }
 
-// Call this from DOMContentLoaded in HTML
-setupEventListeners();
+Dashboard.toggleCorrectionMode = function () {
+  const body = document.body;
+  const button = document.getElementById("correctionModeToggle");
+  const isEnabled = body.getAttribute("data-correction-mode") === "true";
+
+  body.setAttribute("data-correction-mode", !isEnabled);
+  button.classList.toggle("active");
+
+  // Save preference to localStorage
+  localStorage.setItem("correction-mode", !isEnabled);
+};
+
+// Initialize correction mode state and setup event listeners
+document.addEventListener("DOMContentLoaded", function () {
+  const savedMode = localStorage.getItem("correction-mode") === "true";
+  const button = document.getElementById("correctionModeToggle");
+
+  if (savedMode) {
+    document.body.setAttribute("data-correction-mode", "true");
+    button.classList.add("active");
+  }
+
+  button.addEventListener("click", Dashboard.toggleCorrectionMode);
+
+  // Set up all event listeners
+  setupEventListeners();
+});

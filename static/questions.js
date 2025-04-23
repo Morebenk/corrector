@@ -93,6 +93,10 @@ Dashboard.populateQuestions = function (preserveSelection = false) {
     const matchesStatus = statusFilter === "all" || q.status === statusFilter;
     const matchesCategory =
       categoryFilter === "all" || q.category === categoryFilter;
+    const matchesFilePath =
+      filePathFilter === "all" ||
+      q.representative_file_path === filePathFilter ||
+      q.file_path === filePathFilter;
 
     // Enhanced search logic
     const searchQueryNum = parseInt(searchQuery);
@@ -115,7 +119,8 @@ Dashboard.populateQuestions = function (preserveSelection = false) {
       matchesStatus &&
       matchesCategory &&
       matchesSearch &&
-      matchesImageRequirement
+      matchesImageRequirement &&
+      matchesFilePath
     );
   });
 
@@ -309,15 +314,24 @@ Dashboard.displayQuestionDetails = async function (
         <div class="image-container">
           <img src="${q.image_url}" alt="Question Image" class="question-image" onclick="Dashboard.openImageModal('${q.image_url}')"/>
           <div class="image-buttons">
-            <button onclick="Dashboard.openImageBrowser(${q.id}, document.getElementById('filePathDropdown').value !== 'all' ? document.getElementById('filePathDropdown').value : null)" class="image-button browse-button"><i class="fas fa-images"></i> Browse Images</button>
-            <button onclick="Dashboard.removeImage(${q.id})" class="image-button remove-button"><i class="fas fa-trash"></i> Remove Image</button>
+            <button onclick="Dashboard.openImageBrowser(${q.id}, document.getElementById('filePathDropdown').value !== 'all' ? document.getElementById('filePathDropdown').value : null)" class="image-button browse-button" title="Browse Images">
+              <i class="fas fa-images"></i>
+              <span class="button-text">Browse Images</span>
+            </button>
+            <button onclick="Dashboard.removeImage(${q.id})" class="image-button remove-button" title="Remove Image">
+              <i class="fas fa-trash"></i>
+              <span class="button-text">Remove Image</span>
+            </button>
           </div>
         </div>
       `;
     } else {
       html += `
         <div class="image-buttons">
-          <button onclick="Dashboard.openImageBrowser(${q.id}, document.getElementById('filePathDropdown').value !== 'all' ? document.getElementById('filePathDropdown').value : null)" class="image-button browse-button"><i class="fas fa-images"></i> Select Image</button>
+          <button onclick="Dashboard.openImageBrowser(${q.id}, document.getElementById('filePathDropdown').value !== 'all' ? document.getElementById('filePathDropdown').value : null)" class="image-button browse-button" title="Select Image">
+            <i class="fas fa-images"></i>
+            <span class="button-text">Select Image</span>
+          </button>
         </div>
       `;
     }
@@ -327,7 +341,8 @@ Dashboard.displayQuestionDetails = async function (
     html += `<div class="section-title">Choices:</div>
     <div class="choices-list">`;
     q.choices.forEach((choice, i) => {
-      const isCorrect = i === correctIndex;
+      // Use cached is_correct value if available
+      const isCorrect = q.is_correct[i] === "true";
       html += `
         <div class="choice-item ${
           isCorrect ? "correct" : ""
@@ -455,8 +470,7 @@ Dashboard.handleDirectChoiceUpdate = async function (
   selectedIndex
 ) {
   // Get current question data
-  const savedFilters = localStorage.getItem("dashboardFilters");
-  const filePath = savedFilters ? JSON.parse(savedFilters).filePath : null;
+  const filePath = localStorage.getItem("lastFilePathFilter");
   const response = await fetch(
     `/api/question/${questionId}${
       filePath ? `?file_path=${encodeURIComponent(filePath)}` : ""
@@ -484,8 +498,18 @@ Dashboard.handleDirectChoiceUpdate = async function (
   });
 
   if (updateResponse.ok) {
-    // Refresh the display
-    Dashboard.displayQuestionDetails(questionId);
+    // Update the cache to reflect the new choice
+    const filePathFilter = document.getElementById("filePathDropdown").value;
+    const cacheKey = `${questionId}-${filePathFilter}`;
+    if (Dashboard.questionDetailsCache[cacheKey]) {
+      // Update the cached data with the new correct answer
+      const cachedData = Dashboard.questionDetailsCache[cacheKey];
+      cachedData.is_correct = cachedData.choices.map((_, i) =>
+        i === selectedIndex ? "true" : "false"
+      );
+    }
+    // Refresh the display with current selection
+    Dashboard.displayQuestionDetails(questionId, true);
   } else {
     alert("Failed to update choice");
   }

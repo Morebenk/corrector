@@ -107,6 +107,10 @@ Dashboard.openImageBrowser = async function (
 Dashboard.loadImages = async function (file, pageNumber, questionNumber) {
   const imagesGrid = document.querySelector(".images-grid");
   if (!imagesGrid) return;
+
+  // Ensure available pages are loaded first
+  await Dashboard.loadAvailablePages(file);
+
   const cacheKey = `${file}:${pageNumber}:${questionNumber || ""}`;
   if (Dashboard.imageCache.has(cacheKey)) {
     displayImageResults(Dashboard.imageCache.get(cacheKey), questionNumber);
@@ -416,14 +420,22 @@ document.addEventListener("DOMContentLoaded", () => {
           : Dashboard.currentQuestionData?.representative_page;
         if (pageToLoad) {
           Dashboard.currentImagePage = pageToLoad;
-          Dashboard.loadImages(
-            this.value,
-            pageToLoad,
-            location
-              ? location.question_number
-              : Dashboard.currentQuestionData?.representative_question_number
-          );
-          Dashboard.loadAvailablePages(this.value);
+          try {
+            // Load available pages first
+            await Dashboard.loadAvailablePages(this.value);
+            // Then load images
+            await Dashboard.loadImages(
+              this.value,
+              pageToLoad,
+              location
+                ? location.question_number
+                : Dashboard.currentQuestionData?.representative_question_number
+            );
+          } catch (err) {
+            console.error("Error loading pages:", err);
+            document.querySelector(".images-grid").innerHTML =
+              '<div class="error-message">Error loading pages</div>';
+          }
         } else {
           document.querySelector(".images-grid").innerHTML =
             '<div class="error-message">No page information for this file</div>';
